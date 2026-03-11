@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qcii-detector"
+version = "0.1.0"
+description = "Motorola QCII two-tone detector with GPIO relay output for Raspberry Pi 5."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "TonePi"}]
+dependencies = [
+    "numpy>=1.25",
+    "scipy>=1.11",
+    "PyYAML>=6.0",
+    "sounddevice>=0.4",
+    "gpiozero>=1.6",
+    "click>=8.1",
+    "pydantic>=2.7"
+]
+
+[project.scripts]
+qcii = "qcii_detector.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

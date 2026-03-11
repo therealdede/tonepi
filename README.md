@@ -1,0 +1,70 @@
+# QCII Two-Tone Detector (Raspberry Pi 5)
+
+Headless service that listens for Motorola Quick Call II (QCII) two-tone paging pairs and energizes GPIO-driven relays based on configurable tone maps.
+
+## Features
+- Real-time detection using Goertzel filters; configurable tolerance and SNR thresholds.
+- YAML configuration for tone pairs, GPIO actions, and audio settings.
+- CLI utilities for live service, offline detection against WAV files, listing standard tone frequencies, and recording calibration samples.
+- Systemd unit template for Raspberry Pi OS.
+
+## Installation (Pi OS)
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-venv python3-pip libatlas-base-dev python3-scipy python3-numpy python3-yaml python3-sounddevice
+python3 -m venv /opt/qcii-env
+source /opt/qcii-env/bin/activate
+pip install .
+```
+
+## Configuration
+Copy and edit `config.example.yaml`:
+```bash
+cp config.example.yaml /etc/qcii.yaml
+```
+
+Key fields:
+- `audio.sample_rate`, `audio.frame_ms`: capture settings (default 8000 Hz, 100 ms).
+- `tone_pairs`: list of tone pairs with durations, tolerance, and GPIO action (`gpio_pin`, `hold_ms`, `rearm_ms`, `repeat_suppression_ms`).
+- `logging`: console or rotating file.
+
+## Running
+```bash
+qcii run --config /etc/qcii.yaml
+```
+
+Offline detection:
+```bash
+qcii detect --config /etc/qcii.yaml --wav sample.wav
+```
+
+Record calibration audio:
+```bash
+qcii record --seconds 5 --outfile sample.wav --device hw:1,0
+```
+
+List standard QCII tones:
+```bash
+qcii list-tones
+```
+
+## Systemd (optional)
+Edit `deploy/systemd/qcii.service` and place in `/etc/systemd/system/`:
+```bash
+sudo cp deploy/systemd/qcii.service /etc/systemd/system/qcii.service
+sudo systemctl daemon-reload
+sudo systemctl enable qcii
+sudo systemctl start qcii
+```
+
+## Testing
+From the repo root:
+```bash
+pip install -e .[test]
+pytest
+```
+
+## Hardware Notes
+- Use a USB sound card with line-level input for radio interface.
+- Drive relay modules through a transistor/MOSFET from the chosen GPIO pin; provide separate relay coil supply if needed.
+- Default logic leaves relay open on startup; re-arm windows prevent chatter.

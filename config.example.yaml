@@ -1,0 +1,39 @@
+audio:
+  sample_rate: 8000
+  frame_ms: 100
+  bandpass_hz: [300, 3000]
+  device: null
+
+logging:
+  level: INFO
+  file: /var/log/qcii/qcii.log
+  max_bytes: 5000000
+  backup_count: 3
+
+tone_pairs:
+  - name: "Station 1"
+    tone_a_hz: 707.3
+    tone_b_hz: 953.7
+    tone_a_ms: 600
+    tone_b_ms: 600
+    tolerance_pct: 1.5
+    min_snr_db: 6
+    action:
+      gpio_pin: 17
+      hold_ms: 1500
+      rearm_ms: 2000
+      repeat_suppression_ms: 3000
+      name: "Relay 1"
+  - name: "Station 2"
+    tone_a_hz: 634.5
+    tone_b_hz: 879.0
+    tone_a_ms: 600
+    tone_b_ms: 600
+    tolerance_pct: 1.5
+    min_snr_db: 6
+    action:
+      gpio_pin: 27
+      hold_ms: 1500
+      rearm_ms: 2000
+      repeat_suppression_ms: 3000
+      name: "Relay 2"
