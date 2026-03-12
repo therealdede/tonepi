@@ -50,7 +50,7 @@ qcii tui --config /etc/qcii.yaml
 
 List standard QCII tones:
 ```bash
-qcii list-tones
+qcii list-tones --set fdma   # or --set tdma
 ```
 
 ## Systemd (optional)

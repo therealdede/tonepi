@@ -11,7 +11,7 @@ from .config import ServiceConfig, load_config
 from .detect import DetectorEngine, chunk_samples
 from .logging_utils import configure_logging
 from .service import run_service
-from .tones import QCII_FREQUENCIES_HZ
+from .tones import get_tone_set
 from .tui import run_tui
 
 LOG = logging.getLogger(__name__)
@@ -58,9 +58,14 @@ def detect(config_path, wav_path):
 
 
 @main.command()
-def list_tones():
-    """Print standard QCII tone frequencies."""
-    for f in QCII_FREQUENCIES_HZ:
+@click.option("--set", "tone_set", default="fdma", show_default=True, help="Tone set: fdma or tdma")
+def list_tones(tone_set):
+    """Print standard QCII tone frequencies for a tone set."""
+    tones = get_tone_set(tone_set)
+    if tones is None:
+        raise SystemExit(f"Unknown tone set {tone_set}")
+    print(f"Tone set: {tone_set}")
+    for f in tones:
         print(f"{f:7.1f} Hz")
 
 
