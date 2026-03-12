@@ -10,14 +10,14 @@ readme = "README.md"
 requires-python = ">=3.10"
 authors = [{name = "TonePi"}]
 dependencies = [
-    "numpy>=1.25",
-    "scipy>=1.11",
+    "numpy>=2.4",
+    "scipy>=1.17",
     "PyYAML>=6.0",
     "sounddevice>=0.4",
     "gpiozero>=1.6",
     "click>=8.1",
-    "pydantic>=2.7",
-    "textual>=0.40"
+    "pydantic>=2.12",
+    "textual>=2.1"
 ]
 
 [project.scripts]

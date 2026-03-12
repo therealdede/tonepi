@@ -11,7 +11,7 @@ Headless service that listens for Motorola Quick Call II (QCII) two-tone paging 
 ## Installation (Pi OS)
 ```bash
 sudo apt-get update
-sudo apt-get install -y python3-venv python3-pip libatlas-base-dev python3-scipy python3-numpy python3-yaml python3-sounddevice
+sudo apt-get install -y python3-venv python3-pip libopenblas-dev python3-scipy python3-numpy python3-yaml python3-sounddevice
 python3 -m venv /opt/qcii-env
 source /opt/qcii-env/bin/activate
 pip install .
