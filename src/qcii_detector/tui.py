@@ -213,10 +213,9 @@ class QCIIConfigApp(App):
         row = self.tone_table.cursor_row
         if row is None:
             return None
-        try:
-            return int(self.tone_table.get_row_at(row))
-        except Exception:
+        if row < 0 or row >= len(self.manager.config.tone_pairs):
             return None
+        return row
 
     def edit_selected(self):
         idx = self._selected_index()

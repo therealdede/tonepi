@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import logging
 import sys
-from pathlib import Path
 
 import click
 import numpy as np
 
-from .config import ServiceConfig, load_config
+from .config import load_config
 from .detect import DetectorEngine, chunk_samples
 from .logging_utils import configure_logging
 from .service import run_service
@@ -17,9 +16,14 @@ from .tui import run_tui
 LOG = logging.getLogger(__name__)
 
 
-@click.group()
-def main():
+@click.group(invoke_without_command=True)
+@click.option("--config", "default_config_path", default="/etc/qcii.yaml", show_default=True, type=click.Path())
+@click.pass_context
+def main(ctx: click.Context, default_config_path: str):
     """QCII two-tone detector utilities."""
+    # Bare `qcii` launches the interactive TUI for convenience.
+    if ctx.invoked_subcommand is None:
+        run_tui(default_config_path)
 
 
 @main.command()
@@ -58,12 +62,17 @@ def detect(config_path, wav_path):
 
 
 @main.command()
-@click.option("--set", "tone_set", default="fdma", show_default=True, help="Tone set: fdma or tdma")
+@click.option(
+    "--set",
+    "tone_set",
+    default="fdma",
+    show_default=True,
+    type=click.Choice(["fdma", "tdma"], case_sensitive=False),
+    help="Tone set: fdma or tdma",
+)
 def list_tones(tone_set):
     """Print standard QCII tone frequencies for a tone set."""
     tones = get_tone_set(tone_set)
-    if tones is None:
-        raise SystemExit(f"Unknown tone set {tone_set}")
     print(f"Tone set: {tone_set}")
     for f in tones:
         print(f"{f:7.1f} Hz")

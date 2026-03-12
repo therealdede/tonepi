@@ -32,6 +32,10 @@ Key fields:
 
 ## Running
 ```bash
+# Launches console TUI by default:
+qcii
+
+# Run detector service explicitly:
 qcii run --config /etc/qcii.yaml
 ```
 

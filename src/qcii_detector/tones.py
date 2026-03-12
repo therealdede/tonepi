@@ -86,8 +86,11 @@ QCII_TONE_SETS = {
 
 
 def get_tone_set(name: str = "fdma") -> list[float]:
-    """Return the requested tone set; defaults to FDMA."""
-    return QCII_TONE_SETS.get(name.lower(), FDMA_TONES_HZ)
+    """Return the requested tone set or raise for unknown names."""
+    key = name.lower()
+    if key not in QCII_TONE_SETS:
+        raise ValueError(f"Unknown tone set: {name}. Valid sets: {', '.join(sorted(QCII_TONE_SETS))}")
+    return QCII_TONE_SETS[key]
 
 
 def nearest_standard(freq_hz: float, tolerance_pct: float = 1.5, tone_set: str = "fdma") -> float | None:

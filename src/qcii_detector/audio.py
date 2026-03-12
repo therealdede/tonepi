@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
-from queue import Queue
+from queue import Full, Queue
 from threading import Event, Thread
-from typing import Callable, Optional
+from typing import Optional
 
 import numpy as np
 
@@ -21,10 +21,12 @@ class AudioStreamer:
         self.q = target_queue
         self.stop_event = Event()
         self.thread: Optional[Thread] = None
+        self.dropped_frames = 0
 
     def start(self):
         if self.thread:
             return
+        self.stop_event.clear()
         self.thread = Thread(target=self._run, name="audio-streamer", daemon=True)
         self.thread.start()
 
@@ -45,7 +47,15 @@ class AudioStreamer:
             if status:
                 LOG.warning("Audio status: %s", status)
             mono = indata[:, 0] if indata.ndim > 1 else indata
-            self.q.put(np.copy(mono))
+            try:
+                self.q.put_nowait(np.copy(mono))
+            except Full:
+                self.dropped_frames += 1
+                if self.dropped_frames % 50 == 1:
+                    LOG.warning(
+                        "Audio queue full; dropping frames (dropped=%d)",
+                        self.dropped_frames,
+                    )
 
         with sd.InputStream(
             samplerate=self.cfg.sample_rate,
