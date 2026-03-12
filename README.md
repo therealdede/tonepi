@@ -23,7 +23,7 @@ do a git clone, then cd to tonepi, then
 python3 -m venv venv
 source venv/bin/activate
 ```
-- Make sure we have all of the packages that we need
+- *!!Temporarily Kinda Broken!!*    Make sure we have all of the packages that we need. 
 
 ```bash
 sudo apt-get update
