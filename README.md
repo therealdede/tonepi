@@ -1,12 +1,10 @@
-## THIS PROJECT IS WRITTEN COMPLETELY BY AI. 
+# THIS PROJECT IS WRITTEN COMPLETELY BY AI. YES IT IS PROBABLY GARBAGE. 
 
-## YES IT IS PROBABLY GARBAGE. 
+# NO I DO NOT KNOW HOW TO FIX IT. 
 
-## NO I DO NOT KNOW HOW TO FIX IT. 
+# IF YOU ARE HUMAN, AND DO KNOW HOW TO FIX IT, PLEASE FEEL FREE. THANK YOU.
 
-## IF YOU ARE HUMAN DO KNOW HOW TO FIX IT, PLEASE FEEL FREE. THANK YOU. 
-
-# QCII Two-Tone Detector (Raspberry Pi 5)
+## QCII Two-Tone Detector (Raspberry Pi 5)
 
 Headless service that listens for Motorola Quick Call II (QCII) two-tone paging pairs and energizes GPIO-driven relays based on configurable tone maps.
 
