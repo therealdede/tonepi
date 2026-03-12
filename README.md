@@ -46,7 +46,12 @@ source venv/bin/activate
 ```
 pip install .
 ```
-
+- Makes our config file and directory, and makes logs directory, only has to run onne on first start.
+```
+mkdir -p config logs
+cp config.example.yaml config/qcii.yaml
+qcii --config config/qcii.yaml
+```
 Use Python 3.10 or newer. The project requires `>=3.10`.
 
 ## Configuration
