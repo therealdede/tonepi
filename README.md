@@ -15,13 +15,22 @@ Headless service that listens for Motorola Quick Call II (QCII) two-tone paging 
 - Systemd unit template for Raspberry Pi OS.
 
 ## Installation (Pi OS / Debian Trixie)
+
+do a git clone, then - 
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y python3.11 python3.11-venv python3-pip libopenblas-dev python3-scipy python3-numpy python3-yaml python3-sounddevice
+```
+```
+python3 -m venv venv
+source venv/bin/activate
+```
+```
 # Optional: if you want to run the Textual TUI without pip-compiling it inside the venv:
 # sudo apt-get install -y python3-rich python3-textual
-python3.11 -m venv /opt/qcii-env
-source /opt/qcii-env/bin/activate
+```
+```
 pip install .
 ```
 
