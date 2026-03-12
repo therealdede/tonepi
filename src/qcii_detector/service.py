@@ -41,16 +41,17 @@ class QCIIService:
         self.audio.stop()
 
     def _loop(self):
-        try:
-            while not self._stop_event.is_set():
-                try:
-                    block = self.audio_queue.get(timeout=0.5)
-                except queue.Empty:
-                    continue
-                timestamp = int(time.time() * 1000)
-                events = self.detector.process_block(block, timestamp)
-                for ev in events:
-                    self.relay.activate(ev.pair.action)
+        while not self._stop_event.is_set():
+            try:
+                block = self.audio_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            timestamp = int(time.time() * 1000)
+            events = self.detector.process_block(block, timestamp)
+            for ev in events:
+                self.relay.activate(ev.pair.action)
+
+
 def run_service(config_path: str | Path):
     cfg = load_config(config_path)
     configure_logging(cfg.logging)
