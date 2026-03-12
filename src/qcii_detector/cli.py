@@ -12,6 +12,7 @@ from .detect import DetectorEngine, chunk_samples
 from .logging_utils import configure_logging
 from .service import run_service
 from .tones import QCII_FREQUENCIES_HZ
+from .tui import run_tui
 
 LOG = logging.getLogger(__name__)
 
@@ -61,6 +62,13 @@ def list_tones():
     """Print standard QCII tone frequencies."""
     for f in QCII_FREQUENCIES_HZ:
         print(f"{f:7.1f} Hz")
+
+
+@main.command()
+@click.option("--config", "config_path", required=True, type=click.Path(exists=True))
+def tui(config_path):
+    """Launch console (SSH-friendly) TUI to edit config and test relays."""
+    run_tui(config_path)
 
 
 @main.command()

@@ -43,6 +43,11 @@ Record calibration audio:
 qcii record --seconds 5 --outfile sample.wav --device hw:1,0
 ```
 
+Console TUI (SSH-friendly) to edit config and pulse relays:
+```bash
+qcii tui --config /etc/qcii.yaml
+```
+
 List standard QCII tones:
 ```bash
 qcii list-tones

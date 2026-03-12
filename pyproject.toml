@@ -16,7 +16,8 @@ dependencies = [
     "sounddevice>=0.4",
     "gpiozero>=1.6",
     "click>=8.1",
-    "pydantic>=2.7"
+    "pydantic>=2.7",
+    "textual>=0.40"
 ]
 
 [project.scripts]
