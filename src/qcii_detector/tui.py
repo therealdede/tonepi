@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import Optional
 
@@ -9,7 +8,7 @@ import yaml
 from pydantic import ValidationError
 from textual import events
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen
@@ -24,37 +23,82 @@ LOG = logging.getLogger(__name__)
 class ToneEditScreen(ModalScreen[Optional[TonePair]]):
     """Modal editor for a tone pair."""
 
+    CSS = """
+    ToneEditScreen {
+        align: center middle;
+    }
+    #tone-editor {
+        width: 88;
+        height: auto;
+        max-height: 90%;
+        border: round $accent;
+        background: $surface;
+        padding: 1 2;
+    }
+    #tone-form {
+        height: 1fr;
+    }
+    .field-label {
+        margin: 1 0 0 0;
+    }
+    #tone-buttons {
+        margin-top: 1;
+        height: auto;
+    }
+    #tone-buttons Button {
+        width: 1fr;
+        margin-right: 1;
+    }
+    """
+
     def __init__(self, tone: Optional[TonePair] = None):
         super().__init__()
         self.tone = tone
 
     def compose(self) -> ComposeResult:
         tone = self.tone
-        yield Static("Edit Tone Pair", classes="title")
         self.inputs = {
-            "name": Input(value=tone.name if tone else "", placeholder="Name"),
-            "tone_a_hz": Input(value=str(tone.tone_a_hz) if tone else "", placeholder="Tone A (Hz)"),
-            "tone_b_hz": Input(value=str(tone.tone_b_hz) if tone else "", placeholder="Tone B (Hz)"),
-            "tone_a_ms": Input(value=str(tone.tone_a_ms if tone else 600), placeholder="Tone A ms"),
-            "tone_b_ms": Input(value=str(tone.tone_b_ms if tone else 600), placeholder="Tone B ms"),
-            "tolerance_pct": Input(value=str(tone.tolerance_pct if tone else 1.5), placeholder="Tolerance %"),
-            "min_snr_db": Input(value=str(tone.min_snr_db if tone else 6.0), placeholder="Min SNR dB"),
-            "gpio_pin": Input(value=str(tone.action.gpio_pin if tone else ""), placeholder="GPIO pin (BCM)"),
-            "hold_ms": Input(value=str(tone.action.hold_ms if tone else 1500), placeholder="Hold ms"),
-            "rearm_ms": Input(value=str(tone.action.rearm_ms if tone else 2000), placeholder="Rearm ms"),
+            "name": Input(value=tone.name if tone else "", placeholder="Station/Group name"),
+            "tone_a_hz": Input(value=str(tone.tone_a_hz) if tone else "", placeholder="e.g. 707.3"),
+            "tone_b_hz": Input(value=str(tone.tone_b_hz) if tone else "", placeholder="e.g. 953.7"),
+            "tone_a_ms": Input(value=str(tone.tone_a_ms if tone else 600), placeholder="e.g. 600"),
+            "tone_b_ms": Input(value=str(tone.tone_b_ms if tone else 600), placeholder="e.g. 600"),
+            "tolerance_pct": Input(value=str(tone.tolerance_pct if tone else 1.5), placeholder="e.g. 1.5"),
+            "min_snr_db": Input(value=str(tone.min_snr_db if tone else 6.0), placeholder="e.g. 6.0"),
+            "gpio_pin": Input(value=str(tone.action.gpio_pin if tone else ""), placeholder="BCM number"),
+            "hold_ms": Input(value=str(tone.action.hold_ms if tone else 1500), placeholder="e.g. 1500"),
+            "rearm_ms": Input(value=str(tone.action.rearm_ms if tone else 2000), placeholder="e.g. 2000"),
             "repeat_suppression_ms": Input(
-                value=str(tone.action.repeat_suppression_ms if tone else 3000), placeholder="Repeat suppress ms"
+                value=str(tone.action.repeat_suppression_ms if tone else 3000), placeholder="e.g. 3000"
             ),
-            "action_name": Input(value=str(tone.action.name) if tone and tone.action.name else "", placeholder="Action name"),
+            "action_name": Input(
+                value=str(tone.action.name) if tone and tone.action.name else "",
+                placeholder="Optional output label",
+            ),
         }
-        form = Vertical(*self.inputs.values(), classes="form")
-        buttons = Horizontal(
-            Button("Cancel", variant="default", id="cancel"),
-            Button("Save", variant="primary", id="save"),
-            classes="buttons",
-        )
-        yield form
-        yield buttons
+        fields = [
+            ("name", "Name"),
+            ("tone_a_hz", "Tone A (Hz)"),
+            ("tone_b_hz", "Tone B (Hz)"),
+            ("tone_a_ms", "Tone A Duration (ms)"),
+            ("tone_b_ms", "Tone B Duration (ms)"),
+            ("tolerance_pct", "Frequency Tolerance (%)"),
+            ("min_snr_db", "Minimum SNR (dB)"),
+            ("gpio_pin", "GPIO Pin (BCM)"),
+            ("hold_ms", "Relay Hold (ms)"),
+            ("rearm_ms", "Re-arm Delay (ms)"),
+            ("repeat_suppression_ms", "Repeat Suppression (ms)"),
+            ("action_name", "Action Name"),
+        ]
+        with Vertical(id="tone-editor"):
+            yield Static("Edit Tone Pair", classes="title")
+            with VerticalScroll(id="tone-form"):
+                for key, label in fields:
+                    yield Label(label, classes="field-label")
+                    yield self.inputs[key]
+            with Horizontal(id="tone-buttons"):
+                yield Button("Cancel", variant="default", id="cancel")
+                yield Button("Save", variant="primary", id="save")
 
     class Submit(Message):
         def __init__(self, tone: Optional[TonePair]):
@@ -195,19 +239,19 @@ class QCIIConfigApp(App):
         self.test_pulse()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        match event.button.id:
-            case "add":
-                self.push_screen(ToneEditScreen(), self._add_tone_callback)
-            case "edit":
-                self.edit_selected()
-            case "delete":
-                self.delete_selected()
-            case "save":
-                self.save_config()
-            case "reload":
-                self.reload_config()
-            case "pulse":
-                self.test_pulse()
+        button_id = event.button.id
+        if button_id == "add":
+            self.push_screen(ToneEditScreen(), self._add_tone_callback)
+        elif button_id == "edit":
+            self.edit_selected()
+        elif button_id == "delete":
+            self.delete_selected()
+        elif button_id == "save":
+            self.save_config()
+        elif button_id == "reload":
+            self.reload_config()
+        elif button_id == "pulse":
+            self.test_pulse()
 
     def _selected_index(self) -> Optional[int]:
         row = self.tone_table.cursor_row
