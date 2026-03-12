@@ -9,7 +9,7 @@ User=pi
 Group=pi
 Environment=PYTHONUNBUFFERED=1
 WorkingDirectory=/opt/qcii
-ExecStart=/opt/qcii-env/bin/qcii run --config /etc/qcii.yaml
+ExecStart=/opt/qcii-env/bin/qcii run --config /opt/qcii/config/qcii.yaml
 Restart=on-failure
 RestartSec=3
 

@@ -6,7 +6,7 @@ import sys
 import click
 import numpy as np
 
-from .config import load_config
+from .config import DEFAULT_CONFIG_PATH, load_config
 from .detect import DetectorEngine, chunk_samples
 from .logging_utils import configure_logging
 from .service import run_service
@@ -17,7 +17,13 @@ LOG = logging.getLogger(__name__)
 
 
 @click.group(invoke_without_command=True)
-@click.option("--config", "default_config_path", default="/etc/qcii.yaml", show_default=True, type=click.Path())
+@click.option(
+    "--config",
+    "default_config_path",
+    default=DEFAULT_CONFIG_PATH,
+    show_default=True,
+    type=click.Path(),
+)
 @click.pass_context
 def main(ctx: click.Context, default_config_path: str):
     """QCII two-tone detector utilities."""
@@ -27,14 +33,26 @@ def main(ctx: click.Context, default_config_path: str):
 
 
 @main.command()
-@click.option("--config", "config_path", required=True, type=click.Path(exists=True))
+@click.option(
+    "--config",
+    "config_path",
+    default=DEFAULT_CONFIG_PATH,
+    show_default=True,
+    type=click.Path(exists=True),
+)
 def run(config_path):
     """Run the live detector service."""
     run_service(config_path)
 
 
 @main.command()
-@click.option("--config", "config_path", required=True, type=click.Path(exists=True))
+@click.option(
+    "--config",
+    "config_path",
+    default=DEFAULT_CONFIG_PATH,
+    show_default=True,
+    type=click.Path(exists=True),
+)
 @click.option("--wav", "wav_path", required=True, type=click.Path(exists=True))
 def detect(config_path, wav_path):
     """Run offline detection against a WAV file."""
@@ -79,7 +97,13 @@ def list_tones(tone_set):
 
 
 @main.command()
-@click.option("--config", "config_path", required=True, type=click.Path(exists=True))
+@click.option(
+    "--config",
+    "config_path",
+    default=DEFAULT_CONFIG_PATH,
+    show_default=True,
+    type=click.Path(exists=True),
+)
 def tui(config_path):
     """Launch console (SSH-friendly) TUI to edit config and test relays."""
     run_tui(config_path)

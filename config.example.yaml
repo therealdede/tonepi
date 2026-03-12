@@ -6,7 +6,7 @@ audio:
 
 logging:
   level: INFO
-  file: /var/log/qcii/qcii.log
+  file: logs/qcii.log
   max_bytes: 5000000
   backup_count: 3
 

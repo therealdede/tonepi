@@ -52,7 +52,8 @@ Use Python 3.10 or newer. The project requires `>=3.10`.
 ## Configuration
 Copy and edit `config.example.yaml`:
 ```bash
-cp config.example.yaml /etc/qcii.yaml
+mkdir -p config logs
+cp config.example.yaml config/qcii.yaml
 ```
 
 Key fields:
@@ -63,15 +64,15 @@ Key fields:
 ## Running
 ```bash
 # Launches console TUI by default:
-qcii
+qcii --config config/qcii.yaml
 
 # Run detector service explicitly:
-qcii run --config /etc/qcii.yaml
+qcii run --config config/qcii.yaml
 ```
 
 Offline detection:
 ```bash
-qcii detect --config /etc/qcii.yaml --wav sample.wav
+qcii detect --config config/qcii.yaml --wav sample.wav
 ```
 
 Record calibration audio:
@@ -82,7 +83,7 @@ qcii record --seconds 5 --outfile sample.wav --device hw:1,0
 Console TUI (SSH-friendly) to edit config, start/stop live detection, pulse relays,
 and view an in-app tail of the persistent log file:
 ```bash
-qcii tui --config /etc/qcii.yaml
+qcii tui --config config/qcii.yaml
 ```
 
 List standard QCII tones:

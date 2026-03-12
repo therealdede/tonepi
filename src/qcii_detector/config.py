@@ -6,6 +6,9 @@ from typing import List, Optional
 import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+DEFAULT_CONFIG_PATH = "config/qcii.yaml"
+DEFAULT_LOG_PATH = "logs/qcii.log"
+
 
 class ToneAction(BaseModel):
     gpio_pin: int = Field(..., description="GPIO pin number (BCM) driving the relay")
@@ -37,7 +40,7 @@ class TonePair(BaseModel):
 
 class LoggingConfig(BaseModel):
     level: str = Field("INFO")
-    file: Optional[str] = Field(None, description="Optional log file path")
+    file: Optional[str] = Field(DEFAULT_LOG_PATH, description="Optional log file path")
     max_bytes: int = Field(5_000_000, ge=1000)
     backup_count: int = Field(3, ge=0)
 

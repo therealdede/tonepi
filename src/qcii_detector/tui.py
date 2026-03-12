@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import queue
 import threading
 import time
@@ -19,7 +20,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Log, Static
 
 from .audio import AudioStreamer
-from .config import ServiceConfig, ToneAction, TonePair, load_config
+from .config import DEFAULT_CONFIG_PATH, ServiceConfig, ToneAction, TonePair, load_config
 from .detect import DetectorEngine
 from .gpio_output import RelayDriver
 
@@ -160,6 +161,7 @@ class ConfigManager:
 
     def save(self) -> None:
         data = self.config.model_dump()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.path, "w", encoding="utf-8") as f:
             yaml.safe_dump(data, f)
 
@@ -241,7 +243,7 @@ class QCIIConfigApp(App):
         ("p", "pulse", "Test pulse"),
         ("d", "toggle_detect", "Start/Stop detect"),
     ]
-    config_path: reactive[Path] = reactive(Path("/etc/qcii.yaml"))
+    config_path: reactive[Path] = reactive(Path(DEFAULT_CONFIG_PATH))
 
     def __init__(self, config_path: Path):
         super().__init__()
@@ -386,10 +388,12 @@ class QCIIConfigApp(App):
         self.log_file.value = self.manager.config.logging.file or ""
         self._log_status("Reloaded from disk")
         self.refresh_log_tail()
+        self._warn_non_writable_paths(show_popup=False)
 
     def save_config(self):
         try:
             self._apply_form_to_config()
+            self._warn_non_writable_paths(show_popup=False)
             err = self.manager.validate()
             if err:
                 self.push_screen(MessageScreen(f"Validation error:\n{err}"))
@@ -415,6 +419,7 @@ class QCIIConfigApp(App):
             return
         try:
             self._apply_form_to_config()
+            self._warn_non_writable_paths(show_popup=False)
             err = self.manager.validate()
             if err:
                 self.push_screen(MessageScreen(f"Validation error:\n{err}"))
@@ -447,6 +452,7 @@ class QCIIConfigApp(App):
     def on_mount(self) -> None:
         self.tail_timer = self.set_interval(2.0, self.refresh_log_tail)
         self.refresh_log_tail()
+        self._warn_non_writable_paths(show_popup=True)
 
     def on_unmount(self, event: events.Unmount) -> None:
         self.stop_detection()
@@ -486,6 +492,35 @@ class QCIIConfigApp(App):
             self.file_logger.addHandler(handler)
         except Exception as exc:
             LOG.warning("Unable to configure file logging at %s: %s", log_path, exc)
+
+    def _nearest_existing_parent(self, path: Path) -> Path:
+        parent = path.parent
+        while not parent.exists() and parent != parent.parent:
+            parent = parent.parent
+        return parent
+
+    def _is_writable_target(self, path: Path) -> bool:
+        if path.exists():
+            return os.access(path, os.W_OK)
+        parent = self._nearest_existing_parent(path)
+        return os.access(parent, os.W_OK | os.X_OK)
+
+    def _warn_non_writable_paths(self, show_popup: bool) -> None:
+        warnings: list[str] = []
+        if not self._is_writable_target(self.config_path):
+            warnings.append(f"Config path not writable by current user: {self.config_path}")
+
+        log_path_value = self.manager.config.logging.file
+        if log_path_value:
+            log_path = Path(log_path_value)
+            if not self._is_writable_target(log_path):
+                warnings.append(f"Log path not writable by current user: {log_path}")
+
+        for warning in warnings:
+            self._log_status(f"WARNING: {warning}")
+
+        if warnings and show_popup:
+            self.push_screen(MessageScreen("\n".join(warnings)))
 
     def _read_log_tail_lines(self, limit: int = 80) -> list[str]:
         log_path = self.manager.config.logging.file
