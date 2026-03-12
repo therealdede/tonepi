@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import logging
+import queue
+import threading
+import time
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
@@ -14,7 +18,9 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Log, Static
 
+from .audio import AudioStreamer
 from .config import ServiceConfig, ToneAction, TonePair, load_config
+from .detect import DetectorEngine
 from .gpio_output import RelayDriver
 
 LOG = logging.getLogger(__name__)
@@ -177,9 +183,64 @@ class ToneTable(DataTable):
         )
 
 
+class DetectionRuntime:
+    """Runs live detection in background while the TUI remains interactive."""
+
+    def __init__(self, cfg: ServiceConfig, on_status, on_detect):
+        self.cfg = cfg
+        self.on_status = on_status
+        self.on_detect = on_detect
+        self.relay = RelayDriver()
+        self.detector = DetectorEngine(cfg)
+        self.audio_queue = queue.Queue(maxsize=50)
+        self.audio = AudioStreamer(cfg.audio, cfg.frame_samples, self.audio_queue)
+        self.stop_event = threading.Event()
+        self.worker: Optional[threading.Thread] = None
+        self.running = False
+
+    def start(self) -> None:
+        if self.running:
+            return
+        self.stop_event.clear()
+        self.audio.start()
+        self.worker = threading.Thread(target=self._loop, name="qcii-detect", daemon=True)
+        self.running = True
+        self.worker.start()
+
+    def stop(self) -> None:
+        if not self.running:
+            return
+        self.stop_event.set()
+        self.audio.stop()
+        if self.worker:
+            self.worker.join(timeout=2)
+        self.running = False
+
+    def _loop(self) -> None:
+        while not self.stop_event.is_set():
+            try:
+                block = self.audio_queue.get(timeout=0.3)
+            except queue.Empty:
+                continue
+            try:
+                timestamp = int(time.time() * 1000)
+                events = self.detector.process_block(block, timestamp)
+                for event in events:
+                    self.relay.activate(event.pair.action)
+                    self.on_detect(event.pair.name, event.timestamp_ms)
+            except Exception as exc:
+                self.on_status(f"Detection error: {exc}")
+
+
 class QCIIConfigApp(App):
     CSS_PATH = None
-    BINDINGS = [("q", "quit", "Quit"), ("s", "save", "Save"), ("r", "reload", "Reload"), ("p", "pulse", "Test pulse")]
+    BINDINGS = [
+        ("q", "quit", "Quit"),
+        ("s", "save", "Save"),
+        ("r", "reload", "Reload"),
+        ("p", "pulse", "Test pulse"),
+        ("d", "toggle_detect", "Start/Stop detect"),
+    ]
     config_path: reactive[Path] = reactive(Path("/etc/qcii.yaml"))
 
     def __init__(self, config_path: Path):
@@ -187,6 +248,12 @@ class QCIIConfigApp(App):
         self.config_path = config_path
         self.manager = ConfigManager(config_path)
         self.relay = RelayDriver()
+        self.runtime: Optional[DetectionRuntime] = None
+        self.file_logger = logging.getLogger("qcii_detector.tui.runtime")
+        self.file_logger.setLevel(logging.INFO)
+        self.file_logger.propagate = False
+        self.tail_timer = None
+        self._configure_file_logging()
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -218,11 +285,19 @@ class QCIIConfigApp(App):
                 self.log_file = Input(value=self.manager.config.logging.file or "", placeholder="Log file path")
                 yield self.log_level
                 yield self.log_file
+                self.detect_state = Static("Detector: STOPPED")
+                yield self.detect_state
+                yield Button("Start Detection", id="start_detect", variant="success")
+                yield Button("Stop Detection", id="stop_detect", variant="error")
                 yield Button("Test Pulse", id="pulse")
                 yield Button("Save", id="save", variant="primary")
                 yield Button("Reload from disk", id="reload")
                 self.status = Log(highlight=False, max_lines=200)
                 yield self.status
+                yield Static("Persistent Log Tail", classes="section")
+                yield Button("Refresh Log Tail", id="refresh_tail")
+                self.log_tail = Log(highlight=False, max_lines=400)
+                yield self.log_tail
 
     def refresh_tones(self):
         self.tone_table.clear()
@@ -238,6 +313,12 @@ class QCIIConfigApp(App):
     def action_pulse(self):
         self.test_pulse()
 
+    def action_toggle_detect(self):
+        if self.runtime and self.runtime.running:
+            self.stop_detection()
+        else:
+            self.start_detection()
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         button_id = event.button.id
         if button_id == "add":
@@ -252,6 +333,12 @@ class QCIIConfigApp(App):
             self.reload_config()
         elif button_id == "pulse":
             self.test_pulse()
+        elif button_id == "start_detect":
+            self.start_detection()
+        elif button_id == "stop_detect":
+            self.stop_detection()
+        elif button_id == "refresh_tail":
+            self.refresh_log_tail()
 
     def _selected_index(self) -> Optional[int]:
         row = self.tone_table.cursor_row
@@ -288,7 +375,9 @@ class QCIIConfigApp(App):
         self.refresh_tones()
 
     def reload_config(self):
+        self.stop_detection()
         self.manager = ConfigManager(self.config_path)
+        self._configure_file_logging()
         self.refresh_tones()
         self.audio_rate.value = str(self.manager.config.audio.sample_rate)
         self.audio_frame.value = str(self.manager.config.audio.frame_ms)
@@ -296,23 +385,140 @@ class QCIIConfigApp(App):
         self.log_level.value = self.manager.config.logging.level
         self.log_file.value = self.manager.config.logging.file or ""
         self._log_status("Reloaded from disk")
+        self.refresh_log_tail()
 
     def save_config(self):
-        cfg = self.manager.config
         try:
-            cfg.audio.sample_rate = int(self.audio_rate.value)
-            cfg.audio.frame_ms = int(self.audio_frame.value)
-            cfg.audio.device = self.audio_device.value or None
-            cfg.logging.level = self.log_level.value or "INFO"
-            cfg.logging.file = self.log_file.value or None
+            self._apply_form_to_config()
             err = self.manager.validate()
             if err:
                 self.push_screen(MessageScreen(f"Validation error:\n{err}"))
                 return
             self.manager.save()
+            self._configure_file_logging()
             self._log_status(f"Saved to {self.config_path}")
+            self.refresh_log_tail()
         except Exception as exc:
             self.push_screen(MessageScreen(f"Save failed: {exc}"))
+
+    def _apply_form_to_config(self) -> None:
+        cfg = self.manager.config
+        cfg.audio.sample_rate = int(self.audio_rate.value)
+        cfg.audio.frame_ms = int(self.audio_frame.value)
+        cfg.audio.device = self.audio_device.value or None
+        cfg.logging.level = self.log_level.value or "INFO"
+        cfg.logging.file = self.log_file.value or None
+
+    def start_detection(self):
+        if self.runtime and self.runtime.running:
+            self._log_status("Detection already running")
+            return
+        try:
+            self._apply_form_to_config()
+            err = self.manager.validate()
+            if err:
+                self.push_screen(MessageScreen(f"Validation error:\n{err}"))
+                return
+        except Exception as exc:
+            self.push_screen(MessageScreen(f"Cannot start detection: {exc}"))
+            return
+
+        cfg = self.manager.config.model_copy(deep=True)
+        self.runtime = DetectionRuntime(
+            cfg,
+            on_status=lambda msg: self.call_from_thread(self._set_runtime_status, msg),
+            on_detect=lambda name, ts: self.call_from_thread(self._on_detection, name, ts),
+        )
+        try:
+            self.runtime.start()
+            self._set_detector_state(True)
+            self._log_status("Detection started")
+        except Exception as exc:
+            self.push_screen(MessageScreen(f"Failed to start detection: {exc}"))
+            self.runtime = None
+
+    def stop_detection(self):
+        if self.runtime and self.runtime.running:
+            self.runtime.stop()
+            self._log_status("Detection stopped")
+        self.runtime = None
+        self._set_detector_state(False)
+
+    def on_mount(self) -> None:
+        self.tail_timer = self.set_interval(2.0, self.refresh_log_tail)
+        self.refresh_log_tail()
+
+    def on_unmount(self, event: events.Unmount) -> None:
+        self.stop_detection()
+        if self.tail_timer is not None:
+            self.tail_timer.stop()
+        for handler in list(self.file_logger.handlers):
+            self.file_logger.removeHandler(handler)
+            handler.close()
+
+    def _set_detector_state(self, running: bool) -> None:
+        self.detect_state.update("Detector: RUNNING" if running else "Detector: STOPPED")
+
+    def _on_detection(self, pair_name: str, timestamp_ms: int) -> None:
+        self._log_status(f"Detected {pair_name} at {timestamp_ms} ms")
+
+    def _set_runtime_status(self, msg: str) -> None:
+        self._log_status(msg)
+        running = bool(self.runtime and self.runtime.running)
+        self._set_detector_state(running)
+
+    def _configure_file_logging(self) -> None:
+        for handler in list(self.file_logger.handlers):
+            self.file_logger.removeHandler(handler)
+            handler.close()
+        log_path = self.manager.config.logging.file
+        if not log_path:
+            return
+        try:
+            path = Path(log_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            handler = RotatingFileHandler(
+                str(path),
+                maxBytes=self.manager.config.logging.max_bytes,
+                backupCount=self.manager.config.logging.backup_count,
+            )
+            handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+            self.file_logger.addHandler(handler)
+        except Exception as exc:
+            LOG.warning("Unable to configure file logging at %s: %s", log_path, exc)
+
+    def _read_log_tail_lines(self, limit: int = 80) -> list[str]:
+        log_path = self.manager.config.logging.file
+        if not log_path:
+            return []
+        path = Path(log_path)
+        if not path.exists():
+            return []
+        max_bytes = 64 * 1024
+        try:
+            with open(path, "rb") as handle:
+                handle.seek(0, 2)
+                size = handle.tell()
+                handle.seek(max(size - max_bytes, 0))
+                data = handle.read()
+        except Exception:
+            return []
+        text = data.decode("utf-8", errors="replace")
+        return text.splitlines()[-limit:]
+
+    def refresh_log_tail(self) -> None:
+        if not hasattr(self, "log_tail"):
+            return
+        lines = self._read_log_tail_lines(limit=80)
+        try:
+            self.log_tail.clear()
+        except Exception:
+            pass
+        if not lines:
+            self.log_tail.write_line("No log file data available.")
+            return
+        for line in lines:
+            self.log_tail.write_line(line)
 
     def test_pulse(self):
         idx = self._selected_index()
@@ -336,6 +542,8 @@ class QCIIConfigApp(App):
                 self.status.write(msg)
             except Exception:
                 pass
+        if self.file_logger.handlers:
+            self.file_logger.info(msg)
 
 
 def run_tui(config_path: str | Path):

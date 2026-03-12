@@ -79,7 +79,8 @@ Record calibration audio:
 qcii record --seconds 5 --outfile sample.wav --device hw:1,0
 ```
 
-Console TUI (SSH-friendly) to edit config and pulse relays:
+Console TUI (SSH-friendly) to edit config, start/stop live detection, pulse relays,
+and view an in-app tail of the persistent log file:
 ```bash
 qcii tui --config /etc/qcii.yaml
 ```
