@@ -13,16 +13,7 @@ from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import ModalScreen
-from textual.widgets import (
-    Button,
-    DataTable,
-    Footer,
-    Header,
-    Input,
-    Label,
-    Static,
-    TextLog,
-)
+from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Log, Static
 
 from .config import ServiceConfig, ToneAction, TonePair, load_config
 from .gpio_output import RelayDriver
@@ -186,7 +177,7 @@ class QCIIConfigApp(App):
                 yield Button("Test Pulse", id="pulse")
                 yield Button("Save", id="save", variant="primary")
                 yield Button("Reload from disk", id="reload")
-                self.status = TextLog(highlight=False, max_lines=8)
+                self.status = Log(highlight=False, max_lines=200)
                 yield self.status
 
     def refresh_tones(self):
@@ -261,7 +252,7 @@ class QCIIConfigApp(App):
         self.audio_device.value = "" if self.manager.config.audio.device is None else str(self.manager.config.audio.device)
         self.log_level.value = self.manager.config.logging.level
         self.log_file.value = self.manager.config.logging.file or ""
-        self.status.write("Reloaded from disk")
+        self._log_status("Reloaded from disk")
 
     def save_config(self):
         cfg = self.manager.config
@@ -276,7 +267,7 @@ class QCIIConfigApp(App):
                 self.push_screen(MessageScreen(f"Validation error:\n{err}"))
                 return
             self.manager.save()
-            self.status.write(f"Saved to {self.config_path}")
+            self._log_status(f"Saved to {self.config_path}")
         except Exception as exc:
             self.push_screen(MessageScreen(f"Save failed: {exc}"))
 
@@ -287,11 +278,21 @@ class QCIIConfigApp(App):
             return
         action = self.manager.config.tone_pairs[idx].action
         self.relay.activate(action)
-        self.status.write(f"Pulse on GPIO {action.gpio_pin}")
+        self._log_status(f"Pulse on GPIO {action.gpio_pin}")
 
     async def on_key(self, event: events.Key) -> None:
         if event.key == "escape":
             await self.action_quit()
+
+    def _log_status(self, msg: str) -> None:
+        try:
+            self.status.write_line(msg)
+        except Exception:
+            # fallback for older/newer API
+            try:
+                self.status.write(msg)
+            except Exception:
+                pass
 
 
 def run_tui(config_path: str | Path):
