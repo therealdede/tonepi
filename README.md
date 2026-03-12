@@ -17,13 +17,15 @@ Headless service that listens for Motorola Quick Call II (QCII) two-tone paging 
 ## Installation (Pi OS / Debian Trixie)
 ```bash
 sudo apt-get update
-sudo apt-get install -y python3-venv python3-pip libopenblas-dev python3-scipy python3-numpy python3-yaml python3-sounddevice
+sudo apt-get install -y python3.11 python3.11-venv python3-pip libopenblas-dev python3-scipy python3-numpy python3-yaml python3-sounddevice
 # Optional: if you want to run the Textual TUI without pip-compiling it inside the venv:
 # sudo apt-get install -y python3-rich python3-textual
-python3 -m venv /opt/qcii-env
+python3.11 -m venv /opt/qcii-env
 source /opt/qcii-env/bin/activate
 pip install .
 ```
+
+Use Python 3.10 or newer. The project requires `>=3.10`.
 
 ## Configuration
 Copy and edit `config.example.yaml`:
@@ -77,9 +79,11 @@ sudo systemctl start qcii
 ## Testing
 From the repo root:
 ```bash
-pip install -e .[test]
+pip install '.[test]'
 pytest
 ```
+
+This project now defines a `test` extra in [pyproject.toml](/Users/adam/Documents/tonepi/pyproject.toml), so the command above installs `pytest` for the local environment.
 
 ## Hardware Notes
 - Use a USB sound card with line-level input for radio interface.

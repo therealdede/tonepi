@@ -20,15 +20,29 @@ class AudioStreamer:
         self.frame_samples = frame_samples
         self.q = target_queue
         self.stop_event = Event()
+        self.started_event = Event()
         self.thread: Optional[Thread] = None
         self.dropped_frames = 0
+        self.startup_error: Optional[str] = None
 
     def start(self):
         if self.thread:
             return
         self.stop_event.clear()
+        self.started_event.clear()
+        self.startup_error = None
         self.thread = Thread(target=self._run, name="audio-streamer", daemon=True)
         self.thread.start()
+        self.started_event.wait(timeout=5)
+        if self.startup_error:
+            self.thread.join(timeout=2)
+            self.thread = None
+            raise RuntimeError(self.startup_error)
+        if not self.started_event.is_set():
+            self.stop_event.set()
+            self.thread.join(timeout=2)
+            self.thread = None
+            raise RuntimeError("Audio capture did not start within 5 seconds")
 
     def stop(self):
         self.stop_event.set()
@@ -40,7 +54,9 @@ class AudioStreamer:
         try:
             import sounddevice as sd
         except Exception as exc:  # pragma: no cover - import error surface only on target
-            LOG.error("sounddevice unavailable: %s", exc)
+            self.startup_error = f"sounddevice unavailable: {exc}"
+            LOG.error(self.startup_error)
+            self.started_event.set()
             return
 
         def callback(indata, frames, time_info, status):
@@ -57,15 +73,22 @@ class AudioStreamer:
                         self.dropped_frames,
                     )
 
-        with sd.InputStream(
-            samplerate=self.cfg.sample_rate,
-            channels=1,
-            blocksize=self.frame_samples,
-            device=self.cfg.device,
-            dtype="float32",
-            callback=callback,
-        ):
-            LOG.info("Audio capture started (device=%s)", self.cfg.device or "default")
-            while not self.stop_event.is_set():
-                sd.sleep(200)
+        try:
+            with sd.InputStream(
+                samplerate=self.cfg.sample_rate,
+                channels=1,
+                blocksize=self.frame_samples,
+                device=self.cfg.device,
+                dtype="float32",
+                callback=callback,
+            ):
+                LOG.info("Audio capture started (device=%s)", self.cfg.device or "default")
+                self.started_event.set()
+                while not self.stop_event.is_set():
+                    sd.sleep(200)
+        except Exception as exc:
+            self.startup_error = f"audio stream failed to start: {exc}"
+            LOG.error(self.startup_error)
+            self.started_event.set()
+            return
         LOG.info("Audio capture stopped")

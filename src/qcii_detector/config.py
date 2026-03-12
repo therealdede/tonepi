@@ -54,6 +54,13 @@ class ServiceConfig(BaseModel):
     logging: LoggingConfig = LoggingConfig()
     tone_pairs: List[TonePair]
 
+    @field_validator("tone_pairs")
+    @classmethod
+    def require_tone_pairs(cls, value: List[TonePair]) -> List[TonePair]:
+        if not value:
+            raise ValueError("at least one tone pair is required")
+        return value
+
     @property
     def frame_samples(self) -> int:
         return int(self.audio.sample_rate * self.audio.frame_ms / 1000)

@@ -31,7 +31,10 @@ class QCIIService:
     def start(self):
         LOG.info("Starting QCII service with %d tone pairs", len(self.cfg.tone_pairs))
         self.audio.start()
-        self._loop()
+        try:
+            self._loop()
+        finally:
+            self.stop()
 
     def stop(self):
         self._stop_event.set()
@@ -48,10 +51,6 @@ class QCIIService:
                 events = self.detector.process_block(block, timestamp)
                 for ev in events:
                     self.relay.activate(ev.pair.action)
-        finally:
-            self.stop()
-
-
 def run_service(config_path: str | Path):
     cfg = load_config(config_path)
     configure_logging(cfg.logging)
