@@ -17,17 +17,23 @@ Headless service that listens for Motorola Quick Call II (QCII) two-tone paging 
 ## Installation (Pi OS / Debian Trixie)
 
 do a git clone, then cd to tonepi, then
-
-- Make sure we have all of the packages that we need
-
-```bash
-sudo apt-get update
-sudo apt-get install -y python3.11 python3.11-venv python3-pip libopenblas-dev python3-scipy python3-numpy python3-yaml python3-sounddevice
-```
 - open our "sandbox" so we dont mess with system python
 
 ```
 python3 -m venv venv
+source venv/bin/activate
+```
+- Make sure we have all of the packages that we need
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3.11 python3.11-venv python3-pip libopenblas-dev python3-scipy python3-numpy python3-yaml python3-sounddevice lgpio gpiozero
+```
+- Do some stuff so that the program can talk outside of the venv to the hardware correctly
+```
+ deactivate 2>/dev/null
+ rm -rf venv
+python3 -m venv --system-site-packages venv
 source venv/bin/activate
 ```
 - dont know what this is for, skip it i guess???
