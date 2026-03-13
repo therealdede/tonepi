@@ -67,6 +67,7 @@ cp config.example.yaml config/qcii.yaml
 Key fields:
 - `audio.sample_rate`, `audio.frame_ms`: capture settings. Leave `audio.sample_rate` blank/null to use the selected input device's default rate; recording defaults to `44100`.
 - `audio.device`: optional input device override. Leave it unset to auto-select a USB input, preferring names that look like Sabrent/USB audio adapters.
+- `startup.auto_start_detection`: when enabled, the TUI will automatically start detection after a 5 second delay on launch.
 - `tone_pairs`: list of tone pairs with durations, tolerance, and GPIO action (`gpio_pin`, `hold_ms`, `rearm_ms`, `repeat_suppression_ms`).
 - `logging`: console or rotating file.
 

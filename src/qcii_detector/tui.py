@@ -265,6 +265,7 @@ class QCIIConfigApp(App):
         self.runtime: Optional[DetectionRuntime] = None
         self.delete_arm_row: Optional[int] = None
         self.delete_arm_timer = None
+        self.auto_start_timer = None
         self.file_logger = logging.getLogger("qcii_detector.tui.runtime")
         self.file_logger.setLevel(logging.INFO)
         self.file_logger.propagate = False
@@ -311,6 +312,13 @@ class QCIIConfigApp(App):
                 yield self.log_file
                 self.detect_state = Static("Detector: STOPPED")
                 yield self.detect_state
+                self.auto_start_state = Static(self._auto_start_status_text())
+                yield self.auto_start_state
+                self.auto_start_button = Button(
+                    self._auto_start_button_label(),
+                    id="toggle_auto_start",
+                )
+                yield self.auto_start_button
                 self.vu_meter = Static("Input Level: [--------------------] -inf dBFS | peak 0.000")
                 yield self.vu_meter
                 yield Button("Start Detection", id="start_detect", variant="success")
@@ -375,6 +383,9 @@ class QCIIConfigApp(App):
         elif button_id == "refresh_tail":
             self._clear_delete_arm()
             self.refresh_log_tail()
+        elif button_id == "toggle_auto_start":
+            self._clear_delete_arm()
+            self.toggle_auto_start()
 
     def _selected_index(self) -> Optional[int]:
         row = self.tone_table.cursor_row
@@ -427,9 +438,11 @@ class QCIIConfigApp(App):
         self.audio_device.value = "" if self.manager.config.audio.device is None else str(self.manager.config.audio.device)
         self.log_level.value = self.manager.config.logging.level
         self.log_file.value = self.manager.config.logging.file or ""
+        self._update_auto_start_widgets()
         self._log_status("Reloaded from disk")
         self.refresh_log_tail()
         self._warn_non_writable_paths(show_popup=False)
+        self._schedule_auto_start()
 
     def save_config(self):
         try:
@@ -455,6 +468,7 @@ class QCIIConfigApp(App):
         cfg.logging.file = self.log_file.value or None
 
     def start_detection(self):
+        self._cancel_auto_start()
         if self.runtime and self.runtime.running:
             self._log_status("Detection already running")
             return
@@ -485,6 +499,7 @@ class QCIIConfigApp(App):
             self.runtime = None
 
     def stop_detection(self):
+        self._cancel_auto_start()
         if self.runtime and self.runtime.running:
             self.runtime.stop()
             self._log_status("Detection stopped")
@@ -496,10 +511,13 @@ class QCIIConfigApp(App):
         self.tail_timer = self.set_interval(2.0, self.refresh_log_tail)
         self.refresh_log_tail()
         self._warn_non_writable_paths(show_popup=True)
+        self._update_auto_start_widgets()
+        self._schedule_auto_start()
 
     def on_unmount(self, event: events.Unmount) -> None:
         self.stop_detection()
         self._clear_delete_arm()
+        self._cancel_auto_start()
         if self.tail_timer is not None:
             self.tail_timer.stop()
         for handler in list(self.file_logger.handlers):
@@ -572,6 +590,50 @@ class QCIIConfigApp(App):
         self.selected_station.update(
             f"Selected Station: {pair.name} ({pair.tone_a_hz:.1f}/{pair.tone_b_hz:.1f} Hz)"
         )
+
+    def toggle_auto_start(self) -> None:
+        startup = self.manager.config.startup
+        startup.auto_start_detection = not startup.auto_start_detection
+        self._update_auto_start_widgets()
+        if startup.auto_start_detection:
+            self._log_status(
+                f"Auto-start enabled; detection will start after {startup.startup_delay_sec} seconds on TUI launch"
+            )
+        else:
+            self._log_status("Auto-start disabled")
+            self._cancel_auto_start()
+
+    def _auto_start_status_text(self) -> str:
+        startup = self.manager.config.startup
+        status = "ENABLED" if startup.auto_start_detection else "DISABLED"
+        return f"Auto-start Detection: {status} ({startup.startup_delay_sec}s delay)"
+
+    def _auto_start_button_label(self) -> str:
+        return "Disable Auto-Start" if self.manager.config.startup.auto_start_detection else "Enable Auto-Start"
+
+    def _update_auto_start_widgets(self) -> None:
+        if hasattr(self, "auto_start_state"):
+            self.auto_start_state.update(self._auto_start_status_text())
+        if hasattr(self, "auto_start_button"):
+            self.auto_start_button.label = self._auto_start_button_label()
+
+    def _schedule_auto_start(self) -> None:
+        self._cancel_auto_start()
+        startup = self.manager.config.startup
+        if not startup.auto_start_detection:
+            return
+        self._log_status(f"Auto-starting detection in {startup.startup_delay_sec} seconds")
+        self.auto_start_timer = self.set_timer(startup.startup_delay_sec, self._auto_start_detection)
+
+    def _auto_start_detection(self) -> None:
+        self.auto_start_timer = None
+        if self.manager.config.startup.auto_start_detection and not (self.runtime and self.runtime.running):
+            self.start_detection()
+
+    def _cancel_auto_start(self) -> None:
+        if self.auto_start_timer is not None:
+            self.auto_start_timer.stop()
+            self.auto_start_timer = None
 
     def _configure_file_logging(self) -> None:
         for handler in list(self.file_logger.handlers):

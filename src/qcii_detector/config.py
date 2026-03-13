@@ -57,8 +57,22 @@ class AudioConfig(BaseModel):
     device: Optional[str | int] = Field(None, description="ALSA device identifier")
 
 
+class StartupConfig(BaseModel):
+    auto_start_detection: bool = Field(
+        False,
+        description="Start detection automatically when the TUI opens",
+    )
+    startup_delay_sec: int = Field(
+        5,
+        ge=0,
+        le=60,
+        description="Delay before auto-starting detection",
+    )
+
+
 class ServiceConfig(BaseModel):
     audio: AudioConfig = AudioConfig()
+    startup: StartupConfig = StartupConfig()
     logging: LoggingConfig = LoggingConfig()
     tone_pairs: List[TonePair]
 

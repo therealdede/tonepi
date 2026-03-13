@@ -4,6 +4,10 @@ audio:
   bandpass_hz: [300, 3000]
   device: null
 
+startup:
+  auto_start_detection: false
+  startup_delay_sec: 5
+
 logging:
   level: INFO
   file: logs/qcii.log
