@@ -43,6 +43,14 @@ class DetectionEvent:
     timestamp_ms: int
 
 
+@dataclass
+class DetectionDebugInfo:
+    peak_freq_hz: float
+    snr_db: float
+    best_pair_name: str
+    best_pair_delta_hz: float
+
+
 class TonePairState:
     def __init__(self, pair: TonePair, frame_ms: int):
         self.pair = pair
@@ -112,21 +120,46 @@ class DetectorEngine:
         self.bank = GoertzelBank(unique_freqs, config.audio.sample_rate, config.frame_samples)
         self.states = [TonePairState(pair, self.frame_ms) for pair in config.tone_pairs]
 
-    def process_block(self, samples: np.ndarray, timestamp_ms: int | None = None) -> List[DetectionEvent]:
+    def _analyze_block(
+        self, samples: np.ndarray, timestamp_ms: int | None = None
+    ) -> tuple[List[DetectionEvent], DetectionDebugInfo]:
         if timestamp_ms is None:
             timestamp_ms = int(time.time() * 1000)
         block = samples.astype(np.float64)
         powers = self.bank.power(block)
-        noise_floor = np.median(powers) + 1e-12
         peak_idx = int(np.argmax(powers))
+        if len(powers) > 1:
+            other_powers = np.delete(powers, peak_idx)
+            noise_floor = np.median(other_powers) + 1e-12
+        else:
+            noise_floor = 1e-12
         peak_freq = self.bank.freqs[peak_idx]
         peak_power = powers[peak_idx]
         snr_db = db10(peak_power / noise_floor)
+        best_pair = min(
+            self.cfg.tone_pairs,
+            key=lambda pair: min(abs(peak_freq - pair.tone_a_hz), abs(peak_freq - pair.tone_b_hz)),
+        )
+        best_pair_delta_hz = min(abs(peak_freq - best_pair.tone_a_hz), abs(peak_freq - best_pair.tone_b_hz))
 
         events: List[DetectionEvent] = []
         for state in self.states:
             events.extend(state.update(peak_freq, snr_db, timestamp_ms))
+        debug = DetectionDebugInfo(
+            peak_freq_hz=float(peak_freq),
+            snr_db=float(snr_db),
+            best_pair_name=best_pair.name,
+            best_pair_delta_hz=float(best_pair_delta_hz),
+        )
+        return events, debug
+
+    def process_block(self, samples: np.ndarray, timestamp_ms: int | None = None) -> List[DetectionEvent]:
+        events, _ = self._analyze_block(samples, timestamp_ms)
         return events
+
+    def debug_block(self, samples: np.ndarray, timestamp_ms: int | None = None) -> DetectionDebugInfo:
+        _, debug = self._analyze_block(samples, timestamp_ms)
+        return debug
 
 
 def chunk_samples(samples: np.ndarray, frame_samples: int) -> Iterable[np.ndarray]:

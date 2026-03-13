@@ -258,7 +258,7 @@ class ToneTable(DataTable):
 class DetectionRuntime:
     """Runs live detection in background while the TUI remains interactive."""
 
-    def __init__(self, cfg: ServiceConfig, on_status, on_detect, on_level):
+    def __init__(self, cfg: ServiceConfig, on_status, on_detect, on_level, on_debug):
         self.cfg = cfg.model_copy(deep=True)
         self.cfg.audio.device = resolve_input_device(self.cfg.audio.device)
         self.cfg.audio.sample_rate = resolve_sample_rate(
@@ -268,6 +268,7 @@ class DetectionRuntime:
         self.on_status = on_status
         self.on_detect = on_detect
         self.on_level = on_level
+        self.on_debug = on_debug
         self.relay = RelayDriver()
         self.detector = DetectorEngine(self.cfg)
         self.audio_queue = queue.Queue(maxsize=50)
@@ -275,6 +276,7 @@ class DetectionRuntime:
         self.stop_event = threading.Event()
         self.worker: Optional[threading.Thread] = None
         self.running = False
+        self.last_debug_emit_ms = 0
 
     def start(self) -> None:
         if self.running:
@@ -305,6 +307,10 @@ class DetectionRuntime:
                 rms = float(np.sqrt(np.mean(np.square(block)))) if len(block) else 0.0
                 peak = float(np.max(np.abs(block))) if len(block) else 0.0
                 self.on_level(rms, peak)
+                debug = self.detector.debug_block(block, timestamp)
+                if timestamp - self.last_debug_emit_ms >= 1000:
+                    self.last_debug_emit_ms = timestamp
+                    self.on_debug(debug)
                 events = self.detector.process_block(block, timestamp)
                 for event in events:
                     self.relay.activate(event.pair.action)
@@ -556,6 +562,7 @@ class QCIIConfigApp(App):
             on_status=lambda msg: self.call_from_thread(self._set_runtime_status, msg),
             on_detect=lambda name, ts: self.call_from_thread(self._on_detection, name, ts),
             on_level=lambda rms, peak: self.call_from_thread(self._update_vu_meter, rms, peak),
+            on_debug=lambda debug: self.call_from_thread(self._on_detection_debug, debug),
         )
         try:
             self.runtime.start()
@@ -600,6 +607,15 @@ class QCIIConfigApp(App):
 
     def _on_detection(self, pair_name: str, timestamp_ms: int) -> None:
         self._log_status(f"Detected {pair_name} at {timestamp_ms} ms")
+
+    def _on_detection_debug(self, debug) -> None:
+        self._log_status(
+            "Detect debug: "
+            f"peak {debug.peak_freq_hz:.1f} Hz, "
+            f"SNR {debug.snr_db:.1f} dB, "
+            f"nearest {debug.best_pair_name} "
+            f"(delta {debug.best_pair_delta_hz:.1f} Hz)"
+        )
 
     def _update_vu_meter(self, rms: float, peak: float) -> None:
         bar_width = 20
