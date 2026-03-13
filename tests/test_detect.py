@@ -199,3 +199,73 @@ def test_invalid_gpio_pin_logs_and_skips_activation(caplog):
 
     assert 999 in driver.invalid_pins
     assert "Invalid GPIO pin 999" in caplog.text
+
+
+def test_generate_test_wav_and_detect_round_trip(tmp_path):
+    config_path = tmp_path / "qcii.yaml"
+    wav_path = tmp_path / "pair.wav"
+    config_path.write_text(
+        """
+audio:
+  sample_rate: 8000
+  frame_ms: 100
+logging:
+  level: WARNING
+tone_pairs:
+  - name: Dispatch
+    tone_a_hz: 707.3
+    tone_b_hz: 953.7
+    tone_a_ms: 500
+    tone_b_ms: 500
+    tolerance_pct: 1.5
+    min_snr_db: 6.0
+    action:
+      gpio_pin: 17
+""".strip()
+    )
+
+    runner = CliRunner()
+    generate = runner.invoke(
+        cli.main,
+        ["generate-test-wav", "--config", str(config_path), "--outfile", str(wav_path)],
+    )
+    assert generate.exit_code == 0
+    assert wav_path.exists()
+
+    detect = runner.invoke(
+        cli.main,
+        ["detect", "--config", str(config_path), "--wav", str(wav_path)],
+    )
+    assert detect.exit_code == 0
+    assert "Dispatch" in detect.output
+
+
+def test_generate_test_wav_requires_pair_name_when_multiple_pairs(tmp_path):
+    config_path = tmp_path / "qcii.yaml"
+    wav_path = tmp_path / "pair.wav"
+    config_path.write_text(
+        """
+audio:
+  sample_rate: 8000
+tone_pairs:
+  - name: One
+    tone_a_hz: 707.3
+    tone_b_hz: 953.7
+    action:
+      gpio_pin: 17
+  - name: Two
+    tone_a_hz: 600.9
+    tone_b_hz: 788.5
+    action:
+      gpio_pin: 27
+""".strip()
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.main,
+        ["generate-test-wav", "--config", str(config_path), "--outfile", str(wav_path)],
+    )
+
+    assert result.exit_code != 0
+    assert "Multiple tone pairs configured" in result.output

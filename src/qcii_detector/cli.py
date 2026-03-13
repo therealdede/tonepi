@@ -11,6 +11,7 @@ from .config import DEFAULT_CONFIG_PATH, load_config
 from .detect import DetectorEngine, chunk_samples
 from .logging_utils import configure_logging
 from .service import run_service
+from .synth import generate_tone_pair_samples, write_wav
 from .tones import get_tone_set
 from .tui import run_tui
 
@@ -80,6 +81,61 @@ def detect(config_path, wav_path):
         events = engine.process_block(chunk, ts)
         for ev in events:
             print(f"{ts} ms -> {ev.pair.name}")
+
+
+@main.command("generate-test-wav")
+@click.option(
+    "--config",
+    "config_path",
+    default=DEFAULT_CONFIG_PATH,
+    show_default=True,
+    type=click.Path(exists=True),
+)
+@click.option("--outfile", required=True, type=click.Path())
+@click.option(
+    "--pair",
+    "pair_name",
+    default=None,
+    help="Tone pair name to synthesize. Defaults to the only configured pair.",
+)
+@click.option("--lead-in-ms", default=250, show_default=True, type=int)
+@click.option("--gap-ms", default=0, show_default=True, type=int)
+@click.option("--tail-ms", default=250, show_default=True, type=int)
+@click.option("--amplitude", default=0.8, show_default=True, type=float)
+@click.option("--noise-amplitude", default=0.0, show_default=True, type=float)
+@click.option("--seed", default=0, show_default=True, type=int)
+def generate_test_wav(
+    config_path,
+    outfile,
+    pair_name,
+    lead_in_ms,
+    gap_ms,
+    tail_ms,
+    amplitude,
+    noise_amplitude,
+    seed,
+):
+    """Generate a deterministic QCII WAV fixture from the current config."""
+    cfg = load_config(config_path)
+    effective_sample_rate = resolve_sample_rate(cfg.audio.device, cfg.audio.sample_rate)
+    cfg.audio.sample_rate = effective_sample_rate
+
+    pair = _resolve_tone_pair(cfg, pair_name)
+    samples = generate_tone_pair_samples(
+        pair,
+        cfg.audio.sample_rate,
+        lead_in_ms=lead_in_ms,
+        gap_ms=gap_ms,
+        tail_ms=tail_ms,
+        amplitude=amplitude,
+        noise_amplitude=noise_amplitude,
+        seed=seed,
+    )
+    write_wav(outfile, cfg.audio.sample_rate, samples)
+    click.echo(
+        f"Wrote {outfile} for pair '{pair.name}' "
+        f"({pair.tone_a_hz:.1f} Hz/{pair.tone_b_hz:.1f} Hz at {cfg.audio.sample_rate} Hz)"
+    )
 
 
 @main.command()
@@ -158,6 +214,18 @@ def audio_devices():
             f"(in={device.max_input_channels}, out={device.max_output_channels}, "
             f"default_sr={device.default_samplerate:.0f})"
         )
+
+
+def _resolve_tone_pair(cfg, pair_name):
+    if pair_name is None:
+        if len(cfg.tone_pairs) == 1:
+            return cfg.tone_pairs[0]
+        raise SystemExit("Multiple tone pairs configured; pass --pair with an exact pair name.")
+
+    for pair in cfg.tone_pairs:
+        if pair.name == pair_name:
+            return pair
+    raise SystemExit(f"Unknown tone pair '{pair_name}'.")
 
 
 if __name__ == "__main__":  # pragma: no cover

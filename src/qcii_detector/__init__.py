@@ -10,4 +10,5 @@ __all__ = [
     "service",
     "tones",
     "logging_utils",
+    "synth",
 ]

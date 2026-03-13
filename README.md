@@ -85,6 +85,22 @@ Offline detection:
 qcii detect --config config/qcii.yaml --wav sample.wav
 ```
 
+Repeatable decoder test using your saved tone-pair settings:
+```bash
+qcii generate-test-wav --config config/qcii.yaml --outfile /tmp/qcii-test.wav
+qcii detect --config config/qcii.yaml --wav /tmp/qcii-test.wav
+```
+
+If you have more than one configured pair, choose one explicitly:
+```bash
+qcii generate-test-wav --config config/qcii.yaml --pair "Dispatch 1" --outfile /tmp/qcii-test.wav
+```
+
+You can also make the test harsher by adding silence, a gap, or deterministic noise:
+```bash
+qcii generate-test-wav --config config/qcii.yaml --outfile /tmp/qcii-test.wav --gap-ms 250 --noise-amplitude 0.02 --seed 42
+```
+
 Record calibration audio:
 ```bash
 qcii record --seconds 5 --outfile sample.wav --device hw:1,0
