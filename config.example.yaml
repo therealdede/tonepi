@@ -1,5 +1,5 @@
 audio:
-  sample_rate: 8000
+  sample_rate: null
   frame_ms: 100
   bandpass_hz: [300, 3000]
   device: null

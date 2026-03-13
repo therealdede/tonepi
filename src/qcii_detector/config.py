@@ -46,7 +46,12 @@ class LoggingConfig(BaseModel):
 
 
 class AudioConfig(BaseModel):
-    sample_rate: int = Field(8000, ge=4000, le=48000)
+    sample_rate: Optional[int] = Field(
+        None,
+        ge=4000,
+        le=192000,
+        description="Sample rate in Hz; leave unset to use the input device default",
+    )
     frame_ms: int = Field(100, ge=10, le=500)
     bandpass_hz: tuple[int, int] = Field((300, 3000))
     device: Optional[str | int] = Field(None, description="ALSA device identifier")
@@ -66,6 +71,8 @@ class ServiceConfig(BaseModel):
 
     @property
     def frame_samples(self) -> int:
+        if self.audio.sample_rate is None:
+            raise ValueError("frame_samples requires a resolved sample rate")
         return int(self.audio.sample_rate * self.audio.frame_ms / 1000)
 
 

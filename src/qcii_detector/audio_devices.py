@@ -57,6 +57,32 @@ def resolve_input_device(configured: str | int | None) -> str | int | None:
     return selected.index if selected else None
 
 
+def resolve_input_device_info(configured: str | int | None) -> AudioDeviceInfo | None:
+    devices = list_audio_devices()
+    selected = resolve_input_device(configured)
+    if selected is None:
+        return None
+    if isinstance(selected, int):
+        for device in devices:
+            if device.index == selected:
+                return device
+        return None
+    selected_name = str(selected)
+    for device in devices:
+        if device.name == selected_name:
+            return device
+    return None
+
+
+def resolve_sample_rate(configured_device: str | int | None, configured_rate: int | None) -> int:
+    if configured_rate:
+        return int(configured_rate)
+    device = resolve_input_device_info(configured_device)
+    if device and device.default_samplerate > 0:
+        return int(round(device.default_samplerate))
+    return 44100
+
+
 def auto_select_input_device() -> AudioDeviceInfo | None:
     candidates = [device for device in list_audio_devices() if device.is_input]
     if not candidates:

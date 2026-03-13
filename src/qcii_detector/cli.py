@@ -6,13 +6,13 @@ import sys
 import click
 import numpy as np
 
+from .audio_devices import auto_select_input_device, list_audio_devices, resolve_sample_rate
 from .config import DEFAULT_CONFIG_PATH, load_config
 from .detect import DetectorEngine, chunk_samples
 from .logging_utils import configure_logging
 from .service import run_service
 from .tones import get_tone_set
 from .tui import run_tui
-from .audio_devices import auto_select_input_device, list_audio_devices
 
 LOG = logging.getLogger(__name__)
 
@@ -65,6 +65,8 @@ def detect(config_path, wav_path):
         raise SystemExit(f"scipy needed for WAV operations: {exc}") from exc
 
     sr, data = wavfile.read(wav_path)
+    effective_sample_rate = resolve_sample_rate(cfg.audio.device, cfg.audio.sample_rate)
+    cfg.audio.sample_rate = sr if cfg.audio.sample_rate is None else effective_sample_rate
     if sr != cfg.audio.sample_rate:
         raise SystemExit(f"Sample rate mismatch: file {sr} != config {cfg.audio.sample_rate}")
     mono = data
@@ -114,7 +116,7 @@ def tui(config_path):
 @click.option("--seconds", default=5, show_default=True)
 @click.option("--outfile", required=True, type=click.Path())
 @click.option("--device", default=None, help="ALSA device id or name")
-@click.option("--sample-rate", default=8000, show_default=True)
+@click.option("--sample-rate", default=44100, show_default=True)
 def record(seconds, outfile, device, sample_rate):
     """Record audio to WAV for calibration."""
     try:

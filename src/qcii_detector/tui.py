@@ -22,6 +22,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Log, Static
 
 from .audio import AudioStreamer
+from .audio_devices import resolve_input_device, resolve_sample_rate
 from .config import DEFAULT_CONFIG_PATH, ServiceConfig, ToneAction, TonePair, load_config
 from .detect import DetectorEngine
 from .gpio_output import RelayDriver
@@ -191,14 +192,19 @@ class DetectionRuntime:
     """Runs live detection in background while the TUI remains interactive."""
 
     def __init__(self, cfg: ServiceConfig, on_status, on_detect, on_level):
-        self.cfg = cfg
+        self.cfg = cfg.model_copy(deep=True)
+        self.cfg.audio.device = resolve_input_device(self.cfg.audio.device)
+        self.cfg.audio.sample_rate = resolve_sample_rate(
+            self.cfg.audio.device,
+            self.cfg.audio.sample_rate,
+        )
         self.on_status = on_status
         self.on_detect = on_detect
         self.on_level = on_level
         self.relay = RelayDriver()
-        self.detector = DetectorEngine(cfg)
+        self.detector = DetectorEngine(self.cfg)
         self.audio_queue = queue.Queue(maxsize=50)
-        self.audio = AudioStreamer(cfg.audio, cfg.frame_samples, self.audio_queue)
+        self.audio = AudioStreamer(self.cfg.audio, self.cfg.frame_samples, self.audio_queue)
         self.stop_event = threading.Event()
         self.worker: Optional[threading.Thread] = None
         self.running = False
@@ -279,7 +285,10 @@ class QCIIConfigApp(App):
                     yield Button("Delete", id="delete")
             with Vertical(id="right"):
                 yield Static("Audio settings", classes="section")
-                self.audio_rate = Input(value=str(self.manager.config.audio.sample_rate), placeholder="Sample rate")
+                self.audio_rate = Input(
+                    value="" if self.manager.config.audio.sample_rate is None else str(self.manager.config.audio.sample_rate),
+                    placeholder="Sample rate (blank = auto/device default)",
+                )
                 self.audio_frame = Input(value=str(self.manager.config.audio.frame_ms), placeholder="Frame ms")
                 self.audio_device = Input(
                     value="" if self.manager.config.audio.device is None else str(self.manager.config.audio.device),
@@ -390,6 +399,8 @@ class QCIIConfigApp(App):
         self._configure_file_logging()
         self.refresh_tones()
         self.audio_rate.value = str(self.manager.config.audio.sample_rate)
+        if self.manager.config.audio.sample_rate is None:
+            self.audio_rate.value = ""
         self.audio_frame.value = str(self.manager.config.audio.frame_ms)
         self.audio_device.value = "" if self.manager.config.audio.device is None else str(self.manager.config.audio.device)
         self.log_level.value = self.manager.config.logging.level
@@ -415,7 +426,7 @@ class QCIIConfigApp(App):
 
     def _apply_form_to_config(self) -> None:
         cfg = self.manager.config
-        cfg.audio.sample_rate = int(self.audio_rate.value)
+        cfg.audio.sample_rate = int(self.audio_rate.value) if self.audio_rate.value.strip() else None
         cfg.audio.frame_ms = int(self.audio_frame.value)
         cfg.audio.device = self.audio_device.value or None
         cfg.logging.level = self.log_level.value or "INFO"

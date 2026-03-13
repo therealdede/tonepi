@@ -15,21 +15,31 @@ from .config import ServiceConfig, load_config
 from .detect import DetectorEngine
 from .gpio_output import RelayDriver
 from .logging_utils import configure_logging
+from .audio_devices import resolve_input_device, resolve_sample_rate
 
 LOG = logging.getLogger(__name__)
 
 
 class QCIIService:
     def __init__(self, cfg: ServiceConfig):
-        self.cfg = cfg
+        self.cfg = cfg.model_copy(deep=True)
+        self.cfg.audio.device = resolve_input_device(self.cfg.audio.device)
+        self.cfg.audio.sample_rate = resolve_sample_rate(
+            self.cfg.audio.device,
+            self.cfg.audio.sample_rate,
+        )
         self.audio_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=50)
-        self.detector = DetectorEngine(cfg)
+        self.detector = DetectorEngine(self.cfg)
         self.relay = RelayDriver()
-        self.audio = AudioStreamer(cfg.audio, cfg.frame_samples, self.audio_queue)
+        self.audio = AudioStreamer(self.cfg.audio, self.cfg.frame_samples, self.audio_queue)
         self._stop_event = threading.Event()
 
     def start(self):
-        LOG.info("Starting QCII service with %d tone pairs", len(self.cfg.tone_pairs))
+        LOG.info(
+            "Starting QCII service with %d tone pairs at %s Hz",
+            len(self.cfg.tone_pairs),
+            self.cfg.audio.sample_rate,
+        )
         self.audio.start()
         try:
             self._loop()
