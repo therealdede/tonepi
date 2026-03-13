@@ -76,6 +76,10 @@ class ToneEditScreen(ModalScreen[Optional[TonePair]]):
             "tolerance_pct": Input(value=str(tone.tolerance_pct if tone else 1.5), placeholder="e.g. 1.5"),
             "min_snr_db": Input(value=str(tone.min_snr_db if tone else 6.0), placeholder="e.g. 6.0"),
             "gpio_pin": Input(value=str(tone.action.gpio_pin if tone else ""), placeholder="BCM number"),
+            "active_high": Input(
+                value=str(tone.action.active_high).lower() if tone else "true",
+                placeholder="true or false",
+            ),
             "hold_ms": Input(value=str(tone.action.hold_ms if tone else 1500), placeholder="e.g. 1500"),
             "rearm_ms": Input(value=str(tone.action.rearm_ms if tone else 2000), placeholder="e.g. 2000"),
             "repeat_suppression_ms": Input(
@@ -95,6 +99,7 @@ class ToneEditScreen(ModalScreen[Optional[TonePair]]):
             ("tolerance_pct", "Frequency Tolerance (%)"),
             ("min_snr_db", "Minimum SNR (dB)"),
             ("gpio_pin", "GPIO Pin (BCM)"),
+            ("active_high", "Relay Active High"),
             ("hold_ms", "Relay Hold (ms)"),
             ("rearm_ms", "Re-arm Delay (ms)"),
             ("repeat_suppression_ms", "Repeat Suppression (ms)"),
@@ -130,6 +135,7 @@ class ToneEditScreen(ModalScreen[Optional[TonePair]]):
                 min_snr_db=float(self.inputs["min_snr_db"].value),
                 action=ToneAction(
                     gpio_pin=int(self.inputs["gpio_pin"].value),
+                    active_high=self.inputs["active_high"].value.strip().lower() in {"1", "true", "yes", "on"},
                     hold_ms=int(self.inputs["hold_ms"].value),
                     rearm_ms=int(self.inputs["rearm_ms"].value),
                     repeat_suppression_ms=int(self.inputs["repeat_suppression_ms"].value),

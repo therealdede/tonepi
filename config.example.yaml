@@ -24,6 +24,7 @@ tone_pairs:
     min_snr_db: 6
     action:
       gpio_pin: 17
+      active_high: false
       hold_ms: 1500
       rearm_ms: 2000
       repeat_suppression_ms: 3000
@@ -37,6 +38,7 @@ tone_pairs:
     min_snr_db: 6
     action:
       gpio_pin: 27
+      active_high: false
       hold_ms: 1500
       rearm_ms: 2000
       repeat_suppression_ms: 3000

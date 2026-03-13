@@ -12,6 +12,10 @@ DEFAULT_LOG_PATH = "logs/qcii.log"
 
 class ToneAction(BaseModel):
     gpio_pin: int = Field(..., description="GPIO pin number (BCM) driving the relay")
+    active_high: bool = Field(
+        True,
+        description="True for active-high relays, False for active-low relay boards",
+    )
     hold_ms: int = Field(1500, ge=10, description="Relay energized duration")
     rearm_ms: int = Field(2000, ge=0, description="Minimum time before next activation")
     repeat_suppression_ms: int = Field(

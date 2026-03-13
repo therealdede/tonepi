@@ -23,25 +23,42 @@ class RelayDriver:
             LOG.warning("gpiozero unavailable, using mock driver: %s", exc)
             self.gpiozero = None
         self.devices: Dict[int, object] = {}
+        self.device_polarity: Dict[int, bool] = {}
         self.invalid_pins: set[int] = set()
         self.lock = threading.Lock()
         self.last_activation: Dict[int, float] = {}
 
-    def _get_device(self, pin: int):
+    def _build_device(self, action: ToneAction):
+        return self.gpiozero.OutputDevice(
+            action.gpio_pin,
+            active_high=action.active_high,
+            initial_value=False,
+        )
+
+    def _get_device(self, action: ToneAction):
         if self.gpiozero is None:
             return None
+        pin = action.gpio_pin
         if pin in self.invalid_pins:
             return INVALID_DEVICE
-        if pin not in self.devices:
+        current = self.devices.get(pin)
+        if current is not None and self.device_polarity.get(pin) != action.active_high:
+            close = getattr(current, "close", None)
+            if callable(close):
+                close()
+            current = None
+            self.devices.pop(pin, None)
+            self.device_polarity.pop(pin, None)
+        if current is None:
             try:
-                self.devices[pin] = self.gpiozero.OutputDevice(
-                    pin, active_high=True, initial_value=False
-                )
+                self.devices[pin] = self._build_device(action)
+                self.device_polarity[pin] = action.active_high
             except Exception as exc:
                 self.invalid_pins.add(pin)
                 LOG.error("Invalid GPIO pin %s; skipping relay activation: %s", pin, exc)
                 return INVALID_DEVICE
-        return self.devices[pin]
+            return self.devices[pin]
+        return current
 
     def activate(self, action: ToneAction):
         with self.lock:
@@ -55,12 +72,13 @@ class RelayDriver:
                 return
             self.last_activation[action.gpio_pin] = now
 
-        device = self._get_device(action.gpio_pin)
+        device = self._get_device(action)
         LOG.info(
-            "Activating relay pin=%s for %sms (%s)",
+            "Activating relay pin=%s for %sms (%s, active_high=%s)",
             action.gpio_pin,
             action.hold_ms,
             action.name or "unnamed",
+            action.active_high,
         )
         if device is INVALID_DEVICE:
             return

@@ -201,6 +201,31 @@ def test_invalid_gpio_pin_logs_and_skips_activation(caplog):
     assert "Invalid GPIO pin 999" in caplog.text
 
 
+def test_active_low_relay_uses_inverted_gpio_logic():
+    created: list[tuple[int, bool, bool]] = []
+
+    class FakeOutputDevice:
+        def __init__(self, pin, active_high=True, initial_value=False):
+            created.append((pin, active_high, initial_value))
+
+        def on(self):
+            pass
+
+        def off(self):
+            pass
+
+    class FakeGPIOZero:
+        OutputDevice = FakeOutputDevice
+
+    driver = RelayDriver()
+    driver.gpiozero = FakeGPIOZero
+    driver.activate(ToneAction(gpio_pin=17, active_high=False, hold_ms=10))
+    driver.activate(ToneAction(gpio_pin=18, active_high=True, hold_ms=10))
+
+    assert created[0] == (17, False, False)
+    assert created[1] == (18, True, False)
+
+
 def test_generate_test_wav_and_detect_round_trip(tmp_path):
     config_path = tmp_path / "qcii.yaml"
     wav_path = tmp_path / "pair.wav"
