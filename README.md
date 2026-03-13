@@ -63,6 +63,7 @@ cp config.example.yaml config/qcii.yaml
 
 Key fields:
 - `audio.sample_rate`, `audio.frame_ms`: capture settings (default 8000 Hz, 100 ms).
+- `audio.device`: optional input device override. Leave it unset to auto-select a USB input, preferring names that look like Sabrent/USB audio adapters.
 - `tone_pairs`: list of tone pairs with durations, tolerance, and GPIO action (`gpio_pin`, `hold_ms`, `rearm_ms`, `repeat_suppression_ms`).
 - `logging`: console or rotating file.
 
@@ -83,6 +84,11 @@ qcii detect --config config/qcii.yaml --wav sample.wav
 Record calibration audio:
 ```bash
 qcii record --seconds 5 --outfile sample.wav --device hw:1,0
+```
+
+List detected audio devices and see which one auto-selection would use:
+```bash
+qcii audio-devices
 ```
 
 Console TUI (SSH-friendly) to edit config, start/stop live detection, pulse relays,

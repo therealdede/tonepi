@@ -12,6 +12,7 @@ from .logging_utils import configure_logging
 from .service import run_service
 from .tones import get_tone_set
 from .tui import run_tui
+from .audio_devices import auto_select_input_device, list_audio_devices
 
 LOG = logging.getLogger(__name__)
 
@@ -128,6 +129,33 @@ def record(seconds, outfile, device, sample_rate):
     sd.wait()
     wavfile.write(outfile, sample_rate, data)
     click.echo(f"Wrote {outfile}")
+
+
+@main.command("audio-devices")
+def audio_devices():
+    """List available audio devices and highlight the auto-selected input."""
+    try:
+        devices = list_audio_devices()
+        selected = auto_select_input_device()
+    except Exception as exc:
+        raise SystemExit(f"Unable to enumerate audio devices: {exc}") from exc
+
+    if not devices:
+        click.echo("No audio devices found.")
+        return
+
+    for device in devices:
+        markers = []
+        if device.is_input:
+            markers.append("input")
+        if selected and device.index == selected.index:
+            markers.append("auto")
+        marker_text = f" [{' '.join(markers)}]" if markers else ""
+        click.echo(
+            f"{device.index:>2}: {device.name}{marker_text} "
+            f"(in={device.max_input_channels}, out={device.max_output_channels}, "
+            f"default_sr={device.default_samplerate:.0f})"
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover

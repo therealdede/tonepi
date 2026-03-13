@@ -7,6 +7,7 @@ from typing import Optional
 
 import numpy as np
 
+from .audio_devices import describe_selected_input, resolve_input_device
 from .config import AudioConfig
 
 LOG = logging.getLogger(__name__)
@@ -59,6 +60,7 @@ class AudioStreamer:
             self.started_event.set()
             return
 
+        selected_device = None
         def callback(indata, frames, time_info, status):
             if status:
                 LOG.warning("Audio status: %s", status)
@@ -74,15 +76,20 @@ class AudioStreamer:
                     )
 
         try:
+            selected_device = resolve_input_device(self.cfg.device)
             with sd.InputStream(
                 samplerate=self.cfg.sample_rate,
                 channels=1,
                 blocksize=self.frame_samples,
-                device=self.cfg.device,
+                device=selected_device,
                 dtype="float32",
                 callback=callback,
             ):
-                LOG.info("Audio capture started (device=%s)", self.cfg.device or "default")
+                LOG.info(
+                    "Audio capture started (requested=%s, using=%s)",
+                    self.cfg.device if self.cfg.device not in (None, "") else "auto",
+                    describe_selected_input(selected_device),
+                )
                 self.started_event.set()
                 while not self.stop_event.is_set():
                     sd.sleep(200)
