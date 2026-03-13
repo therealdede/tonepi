@@ -16,6 +16,8 @@ Headless service that listens for Motorola Quick Call II (QCII) two-tone paging 
 
 ## Installation (Pi OS / Debian Trixie)
 
+I designed this to be a "lazy" install, meaning you should just be able to copy and paste each step. as with everything, ymmv. 
+
 do a git clone, then cd to tonepi, then
 - open our "sandbox" so we dont mess with system python
 
@@ -27,7 +29,7 @@ source venv/bin/activate
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y python3.11 python3.11-venv python3-pip libopenblas-dev python3-scipy python3-numpy python3-yaml python3-sounddevice lgpio gpiozero
+sudo apt-get install -y python3.11 python3.11-venv python3-pip libopenblas-dev python3-scipy python3-numpy python3-yaml python3-sounddevice libportaudio2 portaudio19-dev
 ```
 - Do some stuff so that the program can talk outside of the venv to the hardware correctly
 ```
@@ -42,8 +44,9 @@ source venv/bin/activate
 # Optional: if you want to run the Textual TUI without pip-compiling it inside the venv:
 # sudo apt-get install -y python3-rich python3-textual
 ```
-- Actually installs the thing
+- does some configuration for the audio libraries, then actually installs the thing
 ```
+sudo ldconfig
 pip install .
 ```
 - Makes our config file and directory, and makes logs directory, only has to run onne on first start.
