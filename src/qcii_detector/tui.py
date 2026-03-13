@@ -23,7 +23,15 @@ from textual.widgets import Button, DataTable, Footer, Header, Input, Label, Log
 
 from .audio import AudioStreamer
 from .audio_devices import resolve_input_device, resolve_sample_rate
-from .config import DEFAULT_CONFIG_PATH, ServiceConfig, ToneAction, TonePair, load_config
+from .config import (
+    DEFAULT_CONFIG_PATH,
+    MAX_ACTION_MS,
+    MIN_ACTION_MS,
+    ServiceConfig,
+    ToneAction,
+    TonePair,
+    load_config,
+)
 from .detect import DetectorEngine
 from .gpio_output import RelayDriver
 
@@ -120,25 +128,60 @@ class ToneEditScreen(ModalScreen[Optional[TonePair]]):
             super().__init__()
             self.tone = tone
 
+    def _parse_int_field(self, key: str, label: str) -> int:
+        raw = self.inputs[key].value.strip()
+        try:
+            return int(raw)
+        except ValueError as exc:
+            raise ValueError(f"{label} must be a whole number") from exc
+
+    def _parse_float_field(self, key: str, label: str) -> float:
+        raw = self.inputs[key].value.strip()
+        try:
+            return float(raw)
+        except ValueError as exc:
+            raise ValueError(f"{label} must be a number") from exc
+
+    def _parse_bool_field(self, key: str, label: str) -> bool:
+        raw = self.inputs[key].value.strip().lower()
+        if raw in {"1", "true", "yes", "on"}:
+            return True
+        if raw in {"0", "false", "no", "off"}:
+            return False
+        raise ValueError(f"{label} must be true or false")
+
+    def _validate_ms_field(self, value: int, label: str) -> int:
+        if value < MIN_ACTION_MS or value > MAX_ACTION_MS:
+            raise ValueError(f"{label} must be between {MIN_ACTION_MS} and {MAX_ACTION_MS} ms")
+        return value
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel":
             self.dismiss(None)
             return
         try:
+            tone_a_ms = self._validate_ms_field(self._parse_int_field("tone_a_ms", "Tone A Duration"), "Tone A Duration")
+            tone_b_ms = self._validate_ms_field(self._parse_int_field("tone_b_ms", "Tone B Duration"), "Tone B Duration")
+            hold_ms = self._validate_ms_field(self._parse_int_field("hold_ms", "Relay Hold"), "Relay Hold")
+            rearm_ms = self._validate_ms_field(self._parse_int_field("rearm_ms", "Re-arm Delay"), "Re-arm Delay")
+            repeat_ms = self._validate_ms_field(
+                self._parse_int_field("repeat_suppression_ms", "Repeat Suppression"),
+                "Repeat Suppression",
+            )
             tone = TonePair(
                 name=self.inputs["name"].value.strip() or "Tone",
-                tone_a_hz=float(self.inputs["tone_a_hz"].value),
-                tone_b_hz=float(self.inputs["tone_b_hz"].value),
-                tone_a_ms=int(self.inputs["tone_a_ms"].value),
-                tone_b_ms=int(self.inputs["tone_b_ms"].value),
-                tolerance_pct=float(self.inputs["tolerance_pct"].value),
-                min_snr_db=float(self.inputs["min_snr_db"].value),
+                tone_a_hz=self._parse_float_field("tone_a_hz", "Tone A"),
+                tone_b_hz=self._parse_float_field("tone_b_hz", "Tone B"),
+                tone_a_ms=tone_a_ms,
+                tone_b_ms=tone_b_ms,
+                tolerance_pct=self._parse_float_field("tolerance_pct", "Frequency Tolerance"),
+                min_snr_db=self._parse_float_field("min_snr_db", "Minimum SNR"),
                 action=ToneAction(
-                    gpio_pin=int(self.inputs["gpio_pin"].value),
-                    active_high=self.inputs["active_high"].value.strip().lower() in {"1", "true", "yes", "on"},
-                    hold_ms=int(self.inputs["hold_ms"].value),
-                    rearm_ms=int(self.inputs["rearm_ms"].value),
-                    repeat_suppression_ms=int(self.inputs["repeat_suppression_ms"].value),
+                    gpio_pin=self._parse_int_field("gpio_pin", "GPIO Pin"),
+                    active_high=self._parse_bool_field("active_high", "Relay Active High"),
+                    hold_ms=hold_ms,
+                    rearm_ms=rearm_ms,
+                    repeat_suppression_ms=repeat_ms,
                     name=self.inputs["action_name"].value or None,
                 ),
             )
