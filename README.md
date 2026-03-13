@@ -95,7 +95,7 @@ qcii audio-devices
 ```
 
 Console TUI (SSH-friendly) to edit config, start/stop live detection, pulse relays,
-and view an in-app tail of the persistent log file:
+and view an in-app tail of the persistent log file plus a live input level meter:
 ```bash
 qcii tui --config config/qcii.yaml
 ```

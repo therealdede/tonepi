@@ -9,8 +9,10 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 import yaml
 from pydantic import ValidationError
+from rich.text import Text
 from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -188,10 +190,11 @@ class ToneTable(DataTable):
 class DetectionRuntime:
     """Runs live detection in background while the TUI remains interactive."""
 
-    def __init__(self, cfg: ServiceConfig, on_status, on_detect):
+    def __init__(self, cfg: ServiceConfig, on_status, on_detect, on_level):
         self.cfg = cfg
         self.on_status = on_status
         self.on_detect = on_detect
+        self.on_level = on_level
         self.relay = RelayDriver()
         self.detector = DetectorEngine(cfg)
         self.audio_queue = queue.Queue(maxsize=50)
@@ -226,6 +229,9 @@ class DetectionRuntime:
                 continue
             try:
                 timestamp = int(time.time() * 1000)
+                rms = float(np.sqrt(np.mean(np.square(block)))) if len(block) else 0.0
+                peak = float(np.max(np.abs(block))) if len(block) else 0.0
+                self.on_level(rms, peak)
                 events = self.detector.process_block(block, timestamp)
                 for event in events:
                     self.relay.activate(event.pair.action)
@@ -289,6 +295,8 @@ class QCIIConfigApp(App):
                 yield self.log_file
                 self.detect_state = Static("Detector: STOPPED")
                 yield self.detect_state
+                self.vu_meter = Static("Input Level: [--------------------] -inf dBFS | peak 0.000")
+                yield self.vu_meter
                 yield Button("Start Detection", id="start_detect", variant="success")
                 yield Button("Stop Detection", id="stop_detect", variant="error")
                 yield Button("Test Pulse", id="pulse")
@@ -433,6 +441,7 @@ class QCIIConfigApp(App):
             cfg,
             on_status=lambda msg: self.call_from_thread(self._set_runtime_status, msg),
             on_detect=lambda name, ts: self.call_from_thread(self._on_detection, name, ts),
+            on_level=lambda rms, peak: self.call_from_thread(self._update_vu_meter, rms, peak),
         )
         try:
             self.runtime.start()
@@ -448,6 +457,7 @@ class QCIIConfigApp(App):
             self._log_status("Detection stopped")
         self.runtime = None
         self._set_detector_state(False)
+        self._update_vu_meter(0.0, 0.0)
 
     def on_mount(self) -> None:
         self.tail_timer = self.set_interval(2.0, self.refresh_log_tail)
@@ -467,6 +477,30 @@ class QCIIConfigApp(App):
 
     def _on_detection(self, pair_name: str, timestamp_ms: int) -> None:
         self._log_status(f"Detected {pair_name} at {timestamp_ms} ms")
+
+    def _update_vu_meter(self, rms: float, peak: float) -> None:
+        bar_width = 20
+        rms_db = 20.0 * np.log10(max(rms, 1e-6))
+        normalized = max(0.0, min(1.0, (rms_db + 60.0) / 60.0))
+        filled = int(round(normalized * bar_width))
+        bar = "#" * filled + "-" * (bar_width - filled)
+        db_text = f"{rms_db:5.1f} dBFS" if rms > 0 else "-inf dBFS"
+        style = self._vu_style(rms_db, peak)
+        meter = Text("Input Level: ")
+        meter.append("[", style="bold white")
+        meter.append(bar, style=style)
+        meter.append("]", style="bold white")
+        meter.append(f" {db_text} | peak {peak:0.3f}", style="white")
+        self.vu_meter.update(meter)
+
+    def _vu_style(self, rms_db: float, peak: float) -> str:
+        if peak >= 0.98 or rms_db >= -3.0:
+            return "bold red"
+        if peak >= 0.85 or rms_db >= -12.0:
+            return "bold yellow"
+        if rms_db >= -30.0:
+            return "bold green"
+        return "dim cyan"
 
     def _set_runtime_status(self, msg: str) -> None:
         self._log_status(msg)
