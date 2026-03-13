@@ -8,6 +8,7 @@ from typing import Dict
 from .config import ToneAction
 
 LOG = logging.getLogger(__name__)
+INVALID_DEVICE = object()
 
 
 class RelayDriver:
@@ -22,16 +23,24 @@ class RelayDriver:
             LOG.warning("gpiozero unavailable, using mock driver: %s", exc)
             self.gpiozero = None
         self.devices: Dict[int, object] = {}
+        self.invalid_pins: set[int] = set()
         self.lock = threading.Lock()
         self.last_activation: Dict[int, float] = {}
 
     def _get_device(self, pin: int):
         if self.gpiozero is None:
             return None
+        if pin in self.invalid_pins:
+            return INVALID_DEVICE
         if pin not in self.devices:
-            self.devices[pin] = self.gpiozero.OutputDevice(
-                pin, active_high=True, initial_value=False
-            )
+            try:
+                self.devices[pin] = self.gpiozero.OutputDevice(
+                    pin, active_high=True, initial_value=False
+                )
+            except Exception as exc:
+                self.invalid_pins.add(pin)
+                LOG.error("Invalid GPIO pin %s; skipping relay activation: %s", pin, exc)
+                return INVALID_DEVICE
         return self.devices[pin]
 
     def activate(self, action: ToneAction):
@@ -53,14 +62,19 @@ class RelayDriver:
             action.hold_ms,
             action.name or "unnamed",
         )
+        if device is INVALID_DEVICE:
+            return
         if device is None:
             LOG.info("Mock activation (no gpiozero)")
             threading.Timer(action.hold_ms / 1000.0, lambda: None).start()
             return
 
         def pulse():
-            device.on()
-            time.sleep(action.hold_ms / 1000.0)
-            device.off()
+            try:
+                device.on()
+                time.sleep(action.hold_ms / 1000.0)
+                device.off()
+            except Exception as exc:
+                LOG.error("GPIO activation failed on pin %s: %s", action.gpio_pin, exc)
 
         threading.Thread(target=pulse, daemon=True).start()

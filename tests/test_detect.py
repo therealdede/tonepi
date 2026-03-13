@@ -10,6 +10,7 @@ from qcii_detector import cli
 from qcii_detector.audio import AudioStreamer
 from qcii_detector.config import AudioConfig, LoggingConfig, ServiceConfig, ToneAction, TonePair
 from qcii_detector.detect import DetectorEngine, chunk_samples
+from qcii_detector.gpio_output import RelayDriver
 
 
 def make_pair_wave(tone_a, tone_b, sample_rate=8000, tone_ms=600, silence_ms=0, amplitude=0.8):
@@ -180,3 +181,21 @@ def test_list_tones_rejects_unknown_choice():
 
     assert result.exit_code != 0
     assert "Invalid value for '--set'" in result.output
+
+
+def test_invalid_gpio_pin_logs_and_skips_activation(caplog):
+    class FakeOutputDevice:
+        def __init__(self, pin, active_high=True, initial_value=False):
+            raise ValueError(f"bad pin {pin}")
+
+    class FakeGPIOZero:
+        OutputDevice = FakeOutputDevice
+
+    driver = RelayDriver()
+    driver.gpiozero = FakeGPIOZero
+
+    with caplog.at_level("ERROR"):
+        driver.activate(ToneAction(gpio_pin=999, hold_ms=10))
+
+    assert 999 in driver.invalid_pins
+    assert "Invalid GPIO pin 999" in caplog.text
