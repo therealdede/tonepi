@@ -155,19 +155,37 @@ class ToneEditScreen(ModalScreen[Optional[TonePair]]):
             raise ValueError(f"{label} must be between {MIN_ACTION_MS} and {MAX_ACTION_MS} ms")
         return value
 
+    def _collect_ms_field_errors(self) -> list[str]:
+        fields = [
+            ("tone_a_ms", "Tone A Duration"),
+            ("tone_b_ms", "Tone B Duration"),
+            ("hold_ms", "Relay Hold"),
+            ("rearm_ms", "Re-arm Delay"),
+            ("repeat_suppression_ms", "Repeat Suppression"),
+        ]
+        errors: list[str] = []
+        for key, label in fields:
+            try:
+                value = self._parse_int_field(key, label)
+                self._validate_ms_field(value, label)
+            except ValueError as exc:
+                errors.append(str(exc))
+        return errors
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cancel":
             self.dismiss(None)
             return
         try:
-            tone_a_ms = self._validate_ms_field(self._parse_int_field("tone_a_ms", "Tone A Duration"), "Tone A Duration")
-            tone_b_ms = self._validate_ms_field(self._parse_int_field("tone_b_ms", "Tone B Duration"), "Tone B Duration")
-            hold_ms = self._validate_ms_field(self._parse_int_field("hold_ms", "Relay Hold"), "Relay Hold")
-            rearm_ms = self._validate_ms_field(self._parse_int_field("rearm_ms", "Re-arm Delay"), "Re-arm Delay")
-            repeat_ms = self._validate_ms_field(
-                self._parse_int_field("repeat_suppression_ms", "Repeat Suppression"),
-                "Repeat Suppression",
-            )
+            ms_errors = self._collect_ms_field_errors()
+            if ms_errors:
+                raise ValueError("\n".join(ms_errors))
+
+            tone_a_ms = self._parse_int_field("tone_a_ms", "Tone A Duration")
+            tone_b_ms = self._parse_int_field("tone_b_ms", "Tone B Duration")
+            hold_ms = self._parse_int_field("hold_ms", "Relay Hold")
+            rearm_ms = self._parse_int_field("rearm_ms", "Re-arm Delay")
+            repeat_ms = self._parse_int_field("repeat_suppression_ms", "Repeat Suppression")
             tone = TonePair(
                 name=self.inputs["name"].value.strip() or "Tone",
                 tone_a_hz=self._parse_float_field("tone_a_hz", "Tone A"),
