@@ -195,7 +195,7 @@ def test_invalid_gpio_pin_logs_and_skips_activation(caplog):
     driver.gpiozero = FakeGPIOZero
 
     with caplog.at_level("ERROR"):
-        driver.activate(ToneAction(gpio_pin=999, hold_ms=10))
+        driver.activate(ToneAction(gpio_pin=999, hold_ms=100))
 
     assert 999 in driver.invalid_pins
     assert "Invalid GPIO pin 999" in caplog.text
@@ -219,11 +219,43 @@ def test_active_low_relay_uses_inverted_gpio_logic():
 
     driver = RelayDriver()
     driver.gpiozero = FakeGPIOZero
-    driver.activate(ToneAction(gpio_pin=17, active_high=False, hold_ms=10))
-    driver.activate(ToneAction(gpio_pin=18, active_high=True, hold_ms=10))
+    driver.activate(ToneAction(gpio_pin=17, active_high=False, hold_ms=100))
+    driver.activate(ToneAction(gpio_pin=18, active_high=True, hold_ms=100))
 
     assert created[0] == (17, False, False)
     assert created[1] == (18, True, False)
+
+
+def test_timing_fields_enforce_100ms_to_10000ms():
+    with pytest.raises(ValidationError):
+        ToneAction(gpio_pin=17, hold_ms=99)
+
+    with pytest.raises(ValidationError):
+        ToneAction(gpio_pin=17, rearm_ms=10_001)
+
+    with pytest.raises(ValidationError):
+        TonePair(
+            name="Test",
+            tone_a_hz=707.3,
+            tone_b_hz=953.7,
+            tone_a_ms=99,
+            tone_b_ms=500,
+            tolerance_pct=1.5,
+            min_snr_db=6.0,
+            action=ToneAction(gpio_pin=17),
+        )
+
+    with pytest.raises(ValidationError):
+        TonePair(
+            name="Test",
+            tone_a_hz=707.3,
+            tone_b_hz=953.7,
+            tone_a_ms=500,
+            tone_b_ms=10_001,
+            tolerance_pct=1.5,
+            min_snr_db=6.0,
+            action=ToneAction(gpio_pin=17),
+        )
 
 
 def test_generate_test_wav_and_detect_round_trip(tmp_path):

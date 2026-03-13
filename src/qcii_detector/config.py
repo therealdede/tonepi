@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 DEFAULT_CONFIG_PATH = "config/qcii.yaml"
 DEFAULT_LOG_PATH = "logs/qcii.log"
+MIN_ACTION_MS = 100
+MAX_ACTION_MS = 10_000
 
 
 class ToneAction(BaseModel):
@@ -16,10 +18,23 @@ class ToneAction(BaseModel):
         True,
         description="True for active-high relays, False for active-low relay boards",
     )
-    hold_ms: int = Field(1500, ge=10, description="Relay energized duration")
-    rearm_ms: int = Field(2000, ge=0, description="Minimum time before next activation")
+    hold_ms: int = Field(
+        1500,
+        ge=MIN_ACTION_MS,
+        le=MAX_ACTION_MS,
+        description="Relay energized duration",
+    )
+    rearm_ms: int = Field(
+        2000,
+        ge=MIN_ACTION_MS,
+        le=MAX_ACTION_MS,
+        description="Minimum time before next activation",
+    )
     repeat_suppression_ms: int = Field(
-        3000, ge=0, description="Ignore repeated detections within this window"
+        3000,
+        ge=MIN_ACTION_MS,
+        le=MAX_ACTION_MS,
+        description="Ignore repeated detections within this window",
     )
     name: str | None = Field(None, description="Optional output name")
 
@@ -28,8 +43,8 @@ class TonePair(BaseModel):
     name: str
     tone_a_hz: float
     tone_b_hz: float
-    tone_a_ms: int = Field(600, ge=100)
-    tone_b_ms: int = Field(600, ge=100)
+    tone_a_ms: int = Field(600, ge=MIN_ACTION_MS, le=MAX_ACTION_MS)
+    tone_b_ms: int = Field(600, ge=MIN_ACTION_MS, le=MAX_ACTION_MS)
     tolerance_pct: float = Field(1.5, ge=0.1, le=5.0)
     min_snr_db: float = Field(6.0, description="Minimum SNR for detection")
     action: ToneAction

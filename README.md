@@ -69,6 +69,7 @@ Key fields:
 - `audio.device`: optional input device override. Leave it unset to auto-select a USB input, preferring names that look like Sabrent/USB audio adapters.
 - `startup.auto_start_detection`: when enabled, the TUI will automatically start detection after a 5 second delay on launch.
 - `tone_pairs`: list of tone pairs with durations, tolerance, and GPIO action (`gpio_pin`, `active_high`, `hold_ms`, `rearm_ms`, `repeat_suppression_ms`).
+- Timing fields in milliseconds (`tone_a_ms`, `tone_b_ms`, `hold_ms`, `rearm_ms`, `repeat_suppression_ms`) must be between `100` and `10000`.
 - `logging`: console or rotating file.
 
 ## Running
