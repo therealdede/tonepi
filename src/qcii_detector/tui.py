@@ -263,6 +263,8 @@ class QCIIConfigApp(App):
         self.manager = ConfigManager(config_path)
         self.relay = RelayDriver()
         self.runtime: Optional[DetectionRuntime] = None
+        self.delete_arm_row: Optional[int] = None
+        self.delete_arm_timer = None
         self.file_logger = logging.getLogger("qcii_detector.tui.runtime")
         self.file_logger.setLevel(logging.INFO)
         self.file_logger.propagate = False
@@ -276,13 +278,18 @@ class QCIIConfigApp(App):
             with Vertical(id="left"):
                 yield Static(f"Config: {self.config_path}", id="path")
                 self.tone_table = ToneTable(id="tones")
+                self.tone_table.cursor_type = "row"
+                self.tone_table.zebra_stripes = True
                 self.tone_table.add_columns("Name", "Tone A", "Tone B", "GPIO", "Hold ms")
                 self.refresh_tones()
                 yield self.tone_table
+                self.selected_station = Static("Selected Station: none")
+                yield self.selected_station
                 with Horizontal():
                     yield Button("Add", id="add")
                     yield Button("Edit", id="edit")
-                    yield Button("Delete", id="delete")
+                    self.delete_button = Button("Delete", id="delete", variant="warning")
+                    yield self.delete_button
             with Vertical(id="right"):
                 yield Static("Audio settings", classes="section")
                 self.audio_rate = Input(
@@ -322,6 +329,8 @@ class QCIIConfigApp(App):
         self.tone_table.clear()
         for idx, pair in enumerate(self.manager.config.tone_pairs):
             self.tone_table.add_pair(idx, pair)
+        self._clear_delete_arm()
+        self._update_selected_station()
 
     def action_save(self):
         self.save_config()
@@ -341,22 +350,30 @@ class QCIIConfigApp(App):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         button_id = event.button.id
         if button_id == "add":
+            self._clear_delete_arm()
             self.push_screen(ToneEditScreen(), self._add_tone_callback)
         elif button_id == "edit":
+            self._clear_delete_arm()
             self.edit_selected()
         elif button_id == "delete":
             self.delete_selected()
         elif button_id == "save":
+            self._clear_delete_arm()
             self.save_config()
         elif button_id == "reload":
+            self._clear_delete_arm()
             self.reload_config()
         elif button_id == "pulse":
+            self._clear_delete_arm()
             self.test_pulse()
         elif button_id == "start_detect":
+            self._clear_delete_arm()
             self.start_detection()
         elif button_id == "stop_detect":
+            self._clear_delete_arm()
             self.stop_detection()
         elif button_id == "refresh_tail":
+            self._clear_delete_arm()
             self.refresh_log_tail()
 
     def _selected_index(self) -> Optional[int]:
@@ -372,6 +389,7 @@ class QCIIConfigApp(App):
         if idx is None:
             self.push_screen(MessageScreen("No tone selected"))
             return
+        self._clear_delete_arm()
         tone = self.manager.config.tone_pairs[idx]
         self.push_screen(ToneEditScreen(tone), lambda result: self._update_tone(idx, result))
 
@@ -390,7 +408,11 @@ class QCIIConfigApp(App):
         if idx is None:
             self.push_screen(MessageScreen("No tone selected"))
             return
+        if self.delete_arm_row != idx:
+            self._arm_delete(idx)
+            return
         del self.manager.config.tone_pairs[idx]
+        self._log_status(f"Deleted tone pair: row {idx + 1}")
         self.refresh_tones()
 
     def reload_config(self):
@@ -477,11 +499,16 @@ class QCIIConfigApp(App):
 
     def on_unmount(self, event: events.Unmount) -> None:
         self.stop_detection()
+        self._clear_delete_arm()
         if self.tail_timer is not None:
             self.tail_timer.stop()
         for handler in list(self.file_logger.handlers):
             self.file_logger.removeHandler(handler)
             handler.close()
+
+    def on_data_table_cell_highlighted(self, event) -> None:
+        self._clear_delete_arm()
+        self._update_selected_station()
 
     def _set_detector_state(self, running: bool) -> None:
         self.detect_state.update("Detector: RUNNING" if running else "Detector: STOPPED")
@@ -517,6 +544,34 @@ class QCIIConfigApp(App):
         self._log_status(msg)
         running = bool(self.runtime and self.runtime.running)
         self._set_detector_state(running)
+
+    def _arm_delete(self, row: int) -> None:
+        self._clear_delete_arm()
+        self.delete_arm_row = row
+        if hasattr(self, "delete_button"):
+            self.delete_button.label = "Confirm Delete (3s)"
+        self._log_status("Press Delete again within 3 seconds to remove the selected station")
+        self.delete_arm_timer = self.set_timer(3.0, self._clear_delete_arm)
+
+    def _clear_delete_arm(self) -> None:
+        self.delete_arm_row = None
+        if self.delete_arm_timer is not None:
+            self.delete_arm_timer.stop()
+            self.delete_arm_timer = None
+        if hasattr(self, "delete_button"):
+            self.delete_button.label = "Delete"
+
+    def _update_selected_station(self) -> None:
+        idx = self._selected_index()
+        if not hasattr(self, "selected_station"):
+            return
+        if idx is None or idx >= len(self.manager.config.tone_pairs):
+            self.selected_station.update("Selected Station: none")
+            return
+        pair = self.manager.config.tone_pairs[idx]
+        self.selected_station.update(
+            f"Selected Station: {pair.name} ({pair.tone_a_hz:.1f}/{pair.tone_b_hz:.1f} Hz)"
+        )
 
     def _configure_file_logging(self) -> None:
         for handler in list(self.file_logger.handlers):
