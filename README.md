@@ -26,11 +26,11 @@ qcii --config config/qcii.yaml
 
 The installer does four things for you:
 - installs the OS/runtime pieces the program needs: `python3`, `python3-venv`, `python3-pip`, `python3-setuptools`, `python3-wheel`, `python3-cffi`, and `libportaudio2`
-- installs distro-packaged Python dependencies when they are available: `click`, `gpiozero`, `numpy`, `pydantic`, `PyYAML`, `rich`, `scipy`, `sounddevice`, and `textual`
+- installs distro-packaged Python dependencies when they are available: `click`, `numpy`, `pydantic`, `PyYAML`, `rich`, `scipy`, `sounddevice`, and `textual`
 - creates `.venv` with `--system-site-packages` so the virtualenv can reuse those apt-managed packages
 - installs this project into the virtualenv, then creates `config/qcii.yaml` plus the `config/` and `logs/` directories if they do not already exist
 
-Anything the distro repo does not provide cleanly, notably `sounddevice`, is installed into the virtualenv by `pip` as part of the project install.
+Anything the distro repo does not provide cleanly, notably `sounddevice`, is installed into the virtualenv by `pip` as part of the project install. On Raspberry Pi 5, `gpiozero` is also intentionally installed from `pip` so the app gets `gpiozero` 2.x instead of the older Debian package line.
 
 Direct Python packages imported by this project:
 - `click`

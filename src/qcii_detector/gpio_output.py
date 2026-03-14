@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from importlib import metadata
 from typing import Dict
 
 from .config import ToneAction
@@ -19,6 +20,7 @@ class RelayDriver:
             import gpiozero  # type: ignore
 
             self.gpiozero = gpiozero
+            self._log_gpiozero_details()
         except Exception as exc:  # pragma: no cover
             LOG.warning("gpiozero unavailable, using mock driver: %s", exc)
             self.gpiozero = None
@@ -27,6 +29,27 @@ class RelayDriver:
         self.invalid_pins: set[int] = set()
         self.lock = threading.Lock()
         self.last_activation: Dict[int, float] = {}
+
+    def _log_gpiozero_details(self) -> None:
+        version = getattr(self.gpiozero, "__version__", "unknown")
+        try:
+            version = metadata.version("gpiozero")
+        except metadata.PackageNotFoundError:
+            pass
+        except Exception:
+            pass
+
+        location = getattr(self.gpiozero, "__file__", "unknown location")
+        LOG.info("Using gpiozero %s from %s", version, location)
+
+        major = _parse_major_version(version)
+        if major is not None and major < 2:
+            LOG.warning(
+                "gpiozero %s detected from %s. Raspberry Pi 5 support requires gpiozero 2.x; "
+                "reinstall the project inside the virtualenv to restore live GPIO output.",
+                version,
+                location,
+            )
 
     def _build_device(self, action: ToneAction):
         return self.gpiozero.OutputDevice(
@@ -96,3 +119,10 @@ class RelayDriver:
                 LOG.error("GPIO activation failed on pin %s: %s", action.gpio_pin, exc)
 
         threading.Thread(target=pulse, daemon=True).start()
+
+
+def _parse_major_version(version: str) -> int | None:
+    try:
+        return int(str(version).split(".", 1)[0])
+    except Exception:
+        return None

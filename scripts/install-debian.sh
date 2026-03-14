@@ -73,7 +73,6 @@ apt_required=(
 
 apt_optional=(
     python3-click
-    python3-gpiozero
     python3-numpy
     python3-pydantic
     python3-rich

@@ -1,6 +1,7 @@
 import sys
 from itertools import combinations
 from queue import Queue
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -12,6 +13,7 @@ from qcii_detector.audio import AudioStreamer
 from qcii_detector.config import AudioConfig, LoggingConfig, ServiceConfig, ToneAction, TonePair
 from qcii_detector.detect import DetectorEngine, chunk_samples
 from qcii_detector.gpio_output import RelayDriver
+from qcii_detector import gpio_output
 from qcii_detector.tones import FDMA_TONES_HZ, decode_standard, nearest_standard
 from qcii_detector.tui import build_vu_meter_text, plain_text
 
@@ -435,6 +437,19 @@ def test_active_low_relay_uses_inverted_gpio_logic():
 
     assert created[0] == (17, False, False)
     assert created[1] == (18, True, False)
+
+
+def test_old_gpiozero_version_warns_for_pi5_compatibility(monkeypatch, caplog):
+    fake_gpiozero = SimpleNamespace(__file__="/venv/lib/python/gpiozero.py")
+    monkeypatch.setitem(sys.modules, "gpiozero", fake_gpiozero)
+    monkeypatch.setattr(gpio_output.metadata, "version", lambda name: "1.6.2")
+
+    with caplog.at_level("WARNING"):
+        driver = RelayDriver()
+
+    assert driver.gpiozero is fake_gpiozero
+    assert "Raspberry Pi 5 support requires gpiozero 2.x" in caplog.text
+    sys.modules.pop("gpiozero", None)
 
 
 def test_timing_fields_enforce_100ms_to_10000ms():
