@@ -363,6 +363,8 @@ class DetectionRuntime:
                     self.on_debug(debug, immediate=False)
                 for event in events:
                     self.relay.activate(event.pair.action)
+                    if self.relay.last_error:
+                        self.on_status(f"Relay error: {self.relay.last_error}")
                     self.on_detect(event.pair.name, event.timestamp_ms)
             except Exception as exc:
                 self.on_status(f"Detection error: {exc}")

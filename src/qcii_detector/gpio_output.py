@@ -109,7 +109,15 @@ class RelayDriver:
         }
         if self.pin_factory is not None:
             kwargs["pin_factory"] = self.pin_factory
-        return self.gpiozero.OutputDevice(action.gpio_pin, **kwargs)
+        try:
+            return self.gpiozero.OutputDevice(action.gpio_pin, **kwargs)
+        except TypeError as exc:
+            # Some fake/minimal backends used in tests or older backends don't
+            # accept an explicit pin_factory keyword. Retry without it.
+            if "pin_factory" in kwargs and "pin_factory" in str(exc):
+                kwargs.pop("pin_factory", None)
+                return self.gpiozero.OutputDevice(action.gpio_pin, **kwargs)
+            raise
 
     def _get_device(self, action: ToneAction):
         if self.gpiozero is None:
