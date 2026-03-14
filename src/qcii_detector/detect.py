@@ -55,6 +55,7 @@ class DetectionDebugInfo:
     tone_b_accum_ms: int
     tone_a_target_ms: int
     tone_b_target_ms: int
+    transition_message: str | None
 
 
 class TonePairState:
@@ -113,6 +114,49 @@ class TonePairState:
                 self.reset()
         return events
 
+    def preview_transition(self, freq_hit: float | None, snr_db: float, now_ms: int) -> str | None:
+        if now_ms < self.suppress_until:
+            return None
+
+        matches_a = (
+            freq_hit is not None
+            and abs(freq_hit - self.pair.tone_a_hz) / self.pair.tone_a_hz * 100
+            <= self.pair.tolerance_pct
+            and snr_db >= self.pair.min_snr_db
+        )
+        matches_b = (
+            freq_hit is not None
+            and abs(freq_hit - self.pair.tone_b_hz) / self.pair.tone_b_hz * 100
+            <= self.pair.tolerance_pct
+            and snr_db >= self.pair.min_snr_db
+        )
+
+        if self.state == "idle":
+            if matches_a:
+                next_a = self.a_accum + self.frame_ms
+                if self.a_accum == 0:
+                    return f"A started ({next_a}/{self.pair.tone_a_ms} ms)"
+                if next_a >= self.pair.tone_a_ms:
+                    return "entered wait_b"
+                return f"A accum {next_a}/{self.pair.tone_a_ms} ms"
+            if self.a_accum > 0:
+                return "reset"
+            return None
+
+        if self.state == "wait_b":
+            if matches_b:
+                next_b = self.b_accum + self.frame_ms
+                if self.b_accum == 0:
+                    return f"B started ({next_b}/{self.pair.tone_b_ms} ms)"
+                if next_b >= self.pair.tone_b_ms:
+                    return "detected"
+                return f"B accum {next_b}/{self.pair.tone_b_ms} ms"
+            if matches_a:
+                return "holding A while waiting for B"
+            return "reset"
+
+        return None
+
 
 class DetectorEngine:
     """Central detector that maps audio blocks to tone pair events."""
@@ -161,6 +205,7 @@ class DetectorEngine:
         best_pair_delta_hz = min(abs(peak_freq - best_pair.tone_a_hz), abs(peak_freq - best_pair.tone_b_hz))
         matches_a, matches_b = self._matches_pair(best_pair, float(peak_freq), float(snr_db))
         state_before = best_state.state
+        transition_message = best_state.preview_transition(peak_freq, snr_db, timestamp_ms)
 
         events: List[DetectionEvent] = []
         if update_states:
@@ -191,6 +236,7 @@ class DetectorEngine:
             tone_b_accum_ms=int(best_state.b_accum),
             tone_a_target_ms=int(best_pair.tone_a_ms),
             tone_b_target_ms=int(best_pair.tone_b_ms),
+            transition_message=transition_message,
         )
         return events, debug
 

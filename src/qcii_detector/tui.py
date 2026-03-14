@@ -312,9 +312,11 @@ class DetectionRuntime:
                 peak = float(np.max(np.abs(block))) if len(block) else 0.0
                 self.on_level(rms, peak)
                 events, debug = self.detector.process_block_with_debug(block, timestamp)
+                if debug.transition_message:
+                    self.on_debug(debug, immediate=True)
                 if timestamp - self.last_debug_emit_ms >= 1000:
                     self.last_debug_emit_ms = timestamp
-                    self.on_debug(debug)
+                    self.on_debug(debug, immediate=False)
                 for event in events:
                     self.relay.activate(event.pair.action)
                     self.on_detect(event.pair.name, event.timestamp_ms)
@@ -565,7 +567,7 @@ class QCIIConfigApp(App):
             on_status=lambda msg: self.call_from_thread(self._set_runtime_status, msg),
             on_detect=lambda name, ts: self.call_from_thread(self._on_detection, name, ts),
             on_level=lambda rms, peak: self.call_from_thread(self._update_vu_meter, rms, peak),
-            on_debug=lambda debug: self.call_from_thread(self._on_detection_debug, debug),
+            on_debug=lambda debug, immediate=False: self.call_from_thread(self._on_detection_debug, debug, immediate),
         )
         try:
             self.runtime.start()
@@ -611,7 +613,18 @@ class QCIIConfigApp(App):
     def _on_detection(self, pair_name: str, timestamp_ms: int) -> None:
         self._log_status(f"Detected {pair_name} at {timestamp_ms} ms")
 
-    def _on_detection_debug(self, debug) -> None:
+    def _on_detection_debug(self, debug, immediate: bool = False) -> None:
+        if immediate and debug.transition_message:
+            self._log_status(
+                "Detect event: "
+                f"{debug.transition_message} "
+                f"(peak {debug.peak_freq_hz:.1f} Hz, "
+                f"SNR {debug.snr_db:.1f} dB, "
+                f"state {debug.pair_state}, "
+                f"A {debug.tone_a_accum_ms}/{debug.tone_a_target_ms} ms, "
+                f"B {debug.tone_b_accum_ms}/{debug.tone_b_target_ms} ms)"
+            )
+            return
         if debug.classification == "idle/noise":
             self._log_status(
                 "Detect status: idle/noise "
