@@ -11,7 +11,7 @@ Headless service that listens for Motorola Quick Call II (QCII) two-tone paging 
 ## Features
 - Real-time detection using Goertzel filters, exact-frequency analysis, document-based FDMA/TDMA bucket decoding, and SNR thresholds.
 - YAML configuration for tone pairs, GPIO actions, and audio settings.
-- CLI utilities for live service, offline detection against WAV files, listing standard tone frequencies, and recording calibration samples.
+- CLI utilities for live service, offline detection against WAV files, GPIO diagnostics/pulse testing, listing standard tone frequencies, and recording calibration samples.
 - Systemd unit template for Raspberry Pi OS.
 
 ## Installation (Pi OS / Debian Trixie)
@@ -67,7 +67,7 @@ Key fields:
 - `audio.sample_rate`, `audio.frame_ms`: capture settings. Leave `audio.sample_rate` blank/null to use the selected input device's default rate; recording defaults to `44100`.
 - `audio.device`: optional input device override. Leave it unset to auto-select a USB input, preferring names that look like Sabrent/USB audio adapters.
 - `startup.auto_start_detection`: when enabled, the TUI will automatically start detection after a 5 second delay on launch.
-- `tone_pairs`: list of tone pairs with durations, SNR threshold, and GPIO action (`gpio_pin`, `active_high`, `hold_ms`, `rearm_ms`, `repeat_suppression_ms`).
+- `tone_pairs`: list of tone pairs with durations, SNR threshold, and GPIO action (`gpio_pin`, `active_high`, `hold_ms`, `rearm_ms`, `repeat_suppression_ms`). `gpio_pin` uses BCM numbering, and the TUI `Test Pulse` button uses the currently selected tone pair's configured pin.
 - `tone_pairs.dropout_tolerance_ms`: allows brief weak/noisy gaps inside tone A or B before the detector resets accumulation; useful for imperfect real-world QCII audio.
 - Standard FDMA and TDMA table tones are matched by the Motorola/APX decode buckets from the tone-set document, not by a user-tuned percentage tolerance.
 - Legacy `tolerance_pct` keys from older configs are ignored on load and dropped the next time the config is saved.
@@ -114,6 +114,14 @@ List detected audio devices and see which one auto-selection would use:
 qcii audio-devices
 ```
 
+Show the active GPIO backend and pulse a relay/output pin directly through the same relay driver used by the TUI/service:
+```bash
+qcii gpio-status
+qcii gpio-pulse --pin 17 --active-low --hold-ms 1000
+```
+
+Use your real BCM pin number there. If your relay board is active-high, switch `--active-low` to `--active-high`.
+
 Console TUI (SSH-friendly) to edit config, start/stop live detection, pulse relays,
 and view an in-app tail of the persistent log file plus a live input level meter:
 ```bash
@@ -126,7 +134,7 @@ qcii list-tones --set fdma   # or --set tdma
 ```
 
 ## Systemd (optional)
-The service template assumes the repo lives at `/opt/tonepi` and the virtualenv lives at `/opt/tonepi/venv`. Edit `deploy/systemd/qcii.service` if you install it anywhere else, then place it in `/etc/systemd/system/`:
+The service template assumes the repo lives at `/opt/tonepi` and the virtualenv lives at `/opt/tonepi/venv`. It also forces `GPIOZERO_PIN_FACTORY=lgpio` so Pi 5 systems use the modern GPIO backend. Edit `deploy/systemd/qcii.service` if you install it anywhere else, then place it in `/etc/systemd/system/`:
 ```bash
 sudo cp deploy/systemd/qcii.service /etc/systemd/system/qcii.service
 sudo systemctl daemon-reload
