@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-venv_dir="${VENV_DIR:-$repo_root/.venv}"
+venv_dir="${VENV_DIR:-$repo_root/venv}"
 python_bin="${PYTHON_BIN:-python3}"
 with_tests=0
 

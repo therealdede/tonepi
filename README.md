@@ -20,14 +20,14 @@ From the repo root, the shortest setup path is:
 
 ```bash
 ./scripts/install-debian.sh
-source .venv/bin/activate
+source venv/bin/activate
 qcii --config config/qcii.yaml
 ```
 
 The installer does four things for you:
 - installs the OS/runtime pieces the program needs: `python3`, `python3-venv`, `python3-pip`, `python3-setuptools`, `python3-wheel`, `python3-cffi`, and `libportaudio2`
 - installs distro-packaged Python dependencies when they are available: `click`, `numpy`, `pydantic`, `PyYAML`, `rich`, `scipy`, `sounddevice`, and `textual`
-- creates `.venv` with `--system-site-packages` so the virtualenv can reuse those apt-managed packages
+- creates `venv` with `--system-site-packages` so the virtualenv can reuse those apt-managed packages
 - installs this project into the virtualenv, then creates `config/qcii.yaml` plus the `config/` and `logs/` directories if they do not already exist
 
 Anything the distro repo does not provide cleanly, notably `sounddevice`, is installed into the virtualenv by `pip` as part of the project install. On Raspberry Pi 5, `gpiozero` is also intentionally installed from `pip` so the app gets `gpiozero` 2.x instead of the older Debian package line, while the installer will also use `python3-lgpio` when the OS provides it because `gpiozero` 2.x prefers `LGPIOFactory` for modern boards.
@@ -50,7 +50,7 @@ If you want the test dependency installed too:
 
 ```bash
 ./scripts/install-debian.sh --with-tests
-source .venv/bin/activate
+source venv/bin/activate
 python -m pytest
 ```
 
@@ -126,7 +126,7 @@ qcii list-tones --set fdma   # or --set tdma
 ```
 
 ## Systemd (optional)
-The service template assumes the repo lives at `/opt/tonepi` and the virtualenv lives at `/opt/tonepi/.venv`. Edit `deploy/systemd/qcii.service` if you install it anywhere else, then place it in `/etc/systemd/system/`:
+The service template assumes the repo lives at `/opt/tonepi` and the virtualenv lives at `/opt/tonepi/venv`. Edit `deploy/systemd/qcii.service` if you install it anywhere else, then place it in `/etc/systemd/system/`:
 ```bash
 sudo cp deploy/systemd/qcii.service /etc/systemd/system/qcii.service
 sudo systemctl daemon-reload
@@ -138,11 +138,11 @@ sudo systemctl start qcii
 From the repo root:
 ```bash
 ./scripts/install-debian.sh --with-tests
-source .venv/bin/activate
+source venv/bin/activate
 python -m pytest
 ```
 
-This project also defines a `test` extra in [pyproject.toml](/Users/adam/Documents/tonepi/pyproject.toml), so you can still use `.venv/bin/python -m pip install --no-build-isolation '.[test]'` if you prefer the manual route.
+This project also defines a `test` extra in [pyproject.toml](/Users/adam/Documents/tonepi/pyproject.toml), so you can still use `venv/bin/python -m pip install --no-build-isolation '.[test]'` if you prefer the manual route.
 
 ## Hardware Notes
 - Use a USB sound card with line-level input for radio interface.
