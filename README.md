@@ -69,7 +69,6 @@ Key fields:
 - `startup.auto_start_detection`: when enabled, the TUI will automatically start detection after a 5 second delay on launch.
 - `tone_pairs`: list of tone pairs with durations, SNR threshold, and GPIO action (`gpio_pin`, `active_high`, `hold_ms`, `rearm_ms`, `repeat_suppression_ms`). `gpio_pin` uses BCM numbering, and the TUI `Test Pulse` button uses the currently selected tone pair's configured pin.
 - `tone_pairs.dropout_tolerance_ms`: allows brief weak/noisy gaps inside tone A or B before the detector resets accumulation; useful for imperfect real-world QCII audio.
-- Standard FDMA and TDMA table tones are matched by the Motorola/APX decode buckets from the tone-set document, not by a user-tuned percentage tolerance.
 - Legacy `tolerance_pct` keys from older configs are ignored on load and dropped the next time the config is saved.
 - Timing fields in milliseconds (`tone_a_ms`, `tone_b_ms`, `hold_ms`, `rearm_ms`, `repeat_suppression_ms`) must be between `100` and `10000`.
 - `logging`: console or rotating file.
