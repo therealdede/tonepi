@@ -30,7 +30,7 @@ The installer does four things for you:
 - creates `.venv` with `--system-site-packages` so the virtualenv can reuse those apt-managed packages
 - installs this project into the virtualenv, then creates `config/qcii.yaml` plus the `config/` and `logs/` directories if they do not already exist
 
-Anything the distro repo does not provide cleanly, notably `sounddevice`, is installed into the virtualenv by `pip` as part of the project install. On Raspberry Pi 5, `gpiozero` is also intentionally installed from `pip` so the app gets `gpiozero` 2.x instead of the older Debian package line.
+Anything the distro repo does not provide cleanly, notably `sounddevice`, is installed into the virtualenv by `pip` as part of the project install. On Raspberry Pi 5, `gpiozero` is also intentionally installed from `pip` so the app gets `gpiozero` 2.x instead of the older Debian package line, while the installer will also use `python3-lgpio` when the OS provides it because `gpiozero` 2.x prefers `LGPIOFactory` for modern boards.
 
 Direct Python packages imported by this project:
 - `click`

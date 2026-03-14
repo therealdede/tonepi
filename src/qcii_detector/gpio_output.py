@@ -4,7 +4,7 @@ import logging
 import threading
 import time
 from importlib import metadata
-from typing import Dict
+from typing import Dict, Optional
 
 from .config import ToneAction
 
@@ -24,6 +24,9 @@ class RelayDriver:
         except Exception as exc:  # pragma: no cover
             LOG.warning("gpiozero unavailable, using mock driver: %s", exc)
             self.gpiozero = None
+        self.pin_factory: Optional[object] = None
+        if self.gpiozero is not None:
+            self.pin_factory = self._prefer_lgpio_factory()
         self.devices: Dict[int, object] = {}
         self.device_polarity: Dict[int, bool] = {}
         self.invalid_pins: set[int] = set()
@@ -51,12 +54,31 @@ class RelayDriver:
                 location,
             )
 
+    def _prefer_lgpio_factory(self) -> Optional[object]:
+        try:
+            from gpiozero import Device  # type: ignore
+            from gpiozero.pins.lgpio import LGPIOFactory  # type: ignore
+
+            if Device.pin_factory is None:
+                Device.pin_factory = LGPIOFactory()
+            LOG.info("Using gpiozero pin factory %s", type(Device.pin_factory).__name__)
+            return Device.pin_factory
+        except Exception as exc:
+            LOG.warning(
+                "Unable to initialize gpiozero LGPIOFactory: %s. "
+                "On Raspberry Pi 5, install python3-lgpio and ensure the user can access /dev/gpiochip*.",
+                exc,
+            )
+            return None
+
     def _build_device(self, action: ToneAction):
-        return self.gpiozero.OutputDevice(
-            action.gpio_pin,
-            active_high=action.active_high,
-            initial_value=False,
-        )
+        kwargs = {
+            "active_high": action.active_high,
+            "initial_value": False,
+        }
+        if self.pin_factory is not None:
+            kwargs["pin_factory"] = self.pin_factory
+        return self.gpiozero.OutputDevice(action.gpio_pin, **kwargs)
 
     def _get_device(self, action: ToneAction):
         if self.gpiozero is None:
@@ -78,7 +100,11 @@ class RelayDriver:
                 self.device_polarity[pin] = action.active_high
             except Exception as exc:
                 self.invalid_pins.add(pin)
-                LOG.error("Invalid GPIO pin %s; skipping relay activation: %s", pin, exc)
+                hint = _pin_error_hint(exc)
+                message = f"Invalid GPIO pin {pin}; skipping relay activation: {exc}"
+                if hint:
+                    message = f"{message}. {hint}"
+                LOG.error(message)
                 return INVALID_DEVICE
             return self.devices[pin]
         return current
@@ -126,3 +152,15 @@ def _parse_major_version(version: str) -> int | None:
         return int(str(version).split(".", 1)[0])
     except Exception:
         return None
+
+
+def _pin_error_hint(exc: Exception) -> str:
+    message = str(exc).lower()
+    if "default pin factory" in message or "badpinfactory" in message:
+        return (
+            "gpiozero could not initialize a GPIO backend; install python3-lgpio "
+            "and make sure the current user can access /dev/gpiochip*"
+        )
+    if "gpiochip" in message or "permission denied" in message:
+        return "check /dev/gpiochip* access and membership in the gpio group"
+    return ""
