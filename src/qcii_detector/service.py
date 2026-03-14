@@ -55,6 +55,9 @@ class QCIIService:
             try:
                 block = self.audio_queue.get(timeout=0.5)
             except queue.Empty:
+                audio_error = self.audio.health_error()
+                if audio_error:
+                    raise RuntimeError(audio_error)
                 continue
             timestamp = int(time.time() * 1000)
             events = self.detector.process_block(block, timestamp)

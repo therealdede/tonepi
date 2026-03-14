@@ -301,6 +301,10 @@ class DetectionRuntime:
             try:
                 block = self.audio_queue.get(timeout=0.3)
             except queue.Empty:
+                audio_error = self.audio.health_error()
+                if audio_error:
+                    self.on_status(f"Audio error: {audio_error}")
+                    self.stop_event.set()
                 continue
             try:
                 timestamp = int(time.time() * 1000)

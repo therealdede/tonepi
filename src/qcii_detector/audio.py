@@ -25,6 +25,7 @@ class AudioStreamer:
         self.thread: Optional[Thread] = None
         self.dropped_frames = 0
         self.startup_error: Optional[str] = None
+        self.runtime_error: Optional[str] = None
 
     def start(self):
         if self.thread:
@@ -32,6 +33,7 @@ class AudioStreamer:
         self.stop_event.clear()
         self.started_event.clear()
         self.startup_error = None
+        self.runtime_error = None
         self.thread = Thread(target=self._run, name="audio-streamer", daemon=True)
         self.thread.start()
         self.started_event.wait(timeout=5)
@@ -50,6 +52,13 @@ class AudioStreamer:
         if self.thread:
             self.thread.join(timeout=2)
             self.thread = None
+
+    def health_error(self) -> Optional[str]:
+        if self.runtime_error:
+            return self.runtime_error
+        if self.thread is not None and not self.thread.is_alive() and not self.stop_event.is_set():
+            return "audio capture stopped unexpectedly"
+        return None
 
     def _run(self):
         try:
@@ -94,8 +103,12 @@ class AudioStreamer:
                 while not self.stop_event.is_set():
                     sd.sleep(200)
         except Exception as exc:
-            self.startup_error = f"audio stream failed to start: {exc}"
-            LOG.error(self.startup_error)
+            message = f"audio stream failed to start: {exc}"
+            if self.started_event.is_set():
+                self.runtime_error = message
+            else:
+                self.startup_error = message
+            LOG.error(message)
             self.started_event.set()
             return
         LOG.info("Audio capture stopped")

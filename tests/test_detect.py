@@ -74,6 +74,24 @@ def test_detects_single_pair_with_default_thresholds():
     assert detections[0].pair.name == "Test"
 
 
+def test_debug_block_does_not_advance_detection_state():
+    tone_a = 687.5
+    tone_b = 937.5
+    cfg = build_config(tone_a, tone_b)
+    engine = DetectorEngine(cfg)
+
+    wave = make_pair_wave(tone_a, tone_b, sample_rate=cfg.audio.sample_rate)
+    detections = []
+    for idx, chunk in enumerate(chunk_samples(wave, cfg.frame_samples)):
+        ts = idx * cfg.audio.frame_ms
+        debug = engine.debug_block(chunk, ts)
+        assert debug.best_pair_name == "Test"
+        detections.extend(engine.process_block(chunk, ts))
+
+    assert len(detections) == 1
+    assert detections[0].pair.name == "Test"
+
+
 def test_no_false_positive_with_noise():
     tone_a = 707.3
     tone_b = 953.7

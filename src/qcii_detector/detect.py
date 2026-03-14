@@ -121,7 +121,7 @@ class DetectorEngine:
         self.states = [TonePairState(pair, self.frame_ms) for pair in config.tone_pairs]
 
     def _analyze_block(
-        self, samples: np.ndarray, timestamp_ms: int | None = None
+        self, samples: np.ndarray, timestamp_ms: int | None = None, *, update_states: bool = True
     ) -> tuple[List[DetectionEvent], DetectionDebugInfo]:
         if timestamp_ms is None:
             timestamp_ms = int(time.time() * 1000)
@@ -143,8 +143,9 @@ class DetectorEngine:
         best_pair_delta_hz = min(abs(peak_freq - best_pair.tone_a_hz), abs(peak_freq - best_pair.tone_b_hz))
 
         events: List[DetectionEvent] = []
-        for state in self.states:
-            events.extend(state.update(peak_freq, snr_db, timestamp_ms))
+        if update_states:
+            for state in self.states:
+                events.extend(state.update(peak_freq, snr_db, timestamp_ms))
         debug = DetectionDebugInfo(
             peak_freq_hz=float(peak_freq),
             snr_db=float(snr_db),
@@ -158,7 +159,7 @@ class DetectorEngine:
         return events
 
     def debug_block(self, samples: np.ndarray, timestamp_ms: int | None = None) -> DetectionDebugInfo:
-        _, debug = self._analyze_block(samples, timestamp_ms)
+        _, debug = self._analyze_block(samples, timestamp_ms, update_states=False)
         return debug
 
 
