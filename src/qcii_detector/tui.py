@@ -39,6 +39,36 @@ from .gpio_output import RelayDriver
 LOG = logging.getLogger(__name__)
 
 
+def plain_text(value: object) -> Text:
+    return Text(str(value))
+
+
+def build_vu_meter_text(rms: float, peak: float, bar_width: int = 20) -> Text:
+    rms_db = 20.0 * np.log10(max(rms, 1e-6))
+    normalized = max(0.0, min(1.0, (rms_db + 60.0) / 60.0))
+    filled = int(round(normalized * bar_width))
+    bar = "#" * filled + "-" * (bar_width - filled)
+    db_text = f"{rms_db:5.1f} dBFS" if rms > 0 else "-inf dBFS"
+    style = _vu_style(rms_db, peak)
+
+    meter = Text("Input Level: ")
+    meter.append("[", style="bold white")
+    meter.append(bar, style=style)
+    meter.append("]", style="bold white")
+    meter.append(f" {db_text} | peak {peak:0.3f}", style="white")
+    return meter
+
+
+def _vu_style(rms_db: float, peak: float) -> str:
+    if peak >= 0.98 or rms_db >= -3.0:
+        return "bold red"
+    if peak >= 0.85 or rms_db >= -12.0:
+        return "bold yellow"
+    if rms_db >= -30.0:
+        return "bold green"
+    return "dim cyan"
+
+
 class ToneEditScreen(ModalScreen[Optional[TonePair]]):
     """Modal editor for a tone pair."""
 
@@ -231,7 +261,7 @@ class MessageScreen(ModalScreen[None]):
         self.text = text
 
     def compose(self) -> ComposeResult:
-        yield Static(self.text, classes="message")
+        yield Static(plain_text(self.text), classes="message")
         yield Button("OK", id="ok", variant="primary")
 
     def on_button_pressed(self, _: Button.Pressed) -> None:
@@ -260,7 +290,7 @@ class ConfigManager:
 class ToneTable(DataTable):
     def add_pair(self, idx: int, pair: TonePair):
         self.add_row(
-            pair.name,
+            plain_text(pair.name),
             f"{pair.tone_a_hz:.1f}",
             f"{pair.tone_b_hz:.1f}",
             str(pair.action.gpio_pin),
@@ -369,14 +399,14 @@ class QCIIConfigApp(App):
         yield Footer()
         with Horizontal():
             with Vertical(id="left"):
-                yield Static(f"Config: {self.config_path}", id="path")
+                yield Static(plain_text(f"Config: {self.config_path}"), id="path")
                 self.tone_table = ToneTable(id="tones")
                 self.tone_table.cursor_type = "row"
                 self.tone_table.zebra_stripes = True
                 self.tone_table.add_columns("Name", "Tone A", "Tone B", "GPIO", "Hold ms")
                 self.refresh_tones()
                 yield self.tone_table
-                self.selected_station = Static("Selected Station: none")
+                self.selected_station = Static(plain_text("Selected Station: none"))
                 yield self.selected_station
                 with Horizontal():
                     yield Button("Add", id="add")
@@ -402,16 +432,16 @@ class QCIIConfigApp(App):
                 self.log_file = Input(value=self.manager.config.logging.file or "", placeholder="Log file path")
                 yield self.log_level
                 yield self.log_file
-                self.detect_state = Static("Detector: STOPPED")
+                self.detect_state = Static(plain_text("Detector: STOPPED"))
                 yield self.detect_state
-                self.auto_start_state = Static(self._auto_start_status_text())
+                self.auto_start_state = Static(plain_text(self._auto_start_status_text()))
                 yield self.auto_start_state
                 self.auto_start_button = Button(
                     self._auto_start_button_label(),
                     id="toggle_auto_start",
                 )
                 yield self.auto_start_button
-                self.vu_meter = Static("Input Level: [--------------------] -inf dBFS | peak 0.000")
+                self.vu_meter = Static(build_vu_meter_text(0.0, 0.0))
                 yield self.vu_meter
                 yield Button("Start Detection", id="start_detect", variant="success")
                 yield Button("Stop Detection", id="stop_detect", variant="error")
@@ -622,7 +652,7 @@ class QCIIConfigApp(App):
         self._update_selected_station()
 
     def _set_detector_state(self, running: bool) -> None:
-        self.detect_state.update("Detector: RUNNING" if running else "Detector: STOPPED")
+        self.detect_state.update(plain_text("Detector: RUNNING" if running else "Detector: STOPPED"))
 
     def _on_detection(self, pair_name: str, timestamp_ms: int) -> None:
         self._log_status(f"Detected {pair_name} at {timestamp_ms} ms")
@@ -661,28 +691,7 @@ class QCIIConfigApp(App):
         )
 
     def _update_vu_meter(self, rms: float, peak: float) -> None:
-        bar_width = 20
-        rms_db = 20.0 * np.log10(max(rms, 1e-6))
-        normalized = max(0.0, min(1.0, (rms_db + 60.0) / 60.0))
-        filled = int(round(normalized * bar_width))
-        bar = "#" * filled + "-" * (bar_width - filled)
-        db_text = f"{rms_db:5.1f} dBFS" if rms > 0 else "-inf dBFS"
-        style = self._vu_style(rms_db, peak)
-        meter = Text("Input Level: ")
-        meter.append("[", style="bold white")
-        meter.append(bar, style=style)
-        meter.append("]", style="bold white")
-        meter.append(f" {db_text} | peak {peak:0.3f}", style="white")
-        self.vu_meter.update(meter)
-
-    def _vu_style(self, rms_db: float, peak: float) -> str:
-        if peak >= 0.98 or rms_db >= -3.0:
-            return "bold red"
-        if peak >= 0.85 or rms_db >= -12.0:
-            return "bold yellow"
-        if rms_db >= -30.0:
-            return "bold green"
-        return "dim cyan"
+        self.vu_meter.update(build_vu_meter_text(rms, peak))
 
     def _set_runtime_status(self, msg: str) -> None:
         self._log_status(msg)
@@ -710,11 +719,11 @@ class QCIIConfigApp(App):
         if not hasattr(self, "selected_station"):
             return
         if idx is None or idx >= len(self.manager.config.tone_pairs):
-            self.selected_station.update("Selected Station: none")
+            self.selected_station.update(plain_text("Selected Station: none"))
             return
         pair = self.manager.config.tone_pairs[idx]
         self.selected_station.update(
-            f"Selected Station: {pair.name} ({pair.tone_a_hz:.1f}/{pair.tone_b_hz:.1f} Hz)"
+            plain_text(f"Selected Station: {pair.name} ({pair.tone_a_hz:.1f}/{pair.tone_b_hz:.1f} Hz)")
         )
 
     def toggle_auto_start(self) -> None:
@@ -739,7 +748,7 @@ class QCIIConfigApp(App):
 
     def _update_auto_start_widgets(self) -> None:
         if hasattr(self, "auto_start_state"):
-            self.auto_start_state.update(self._auto_start_status_text())
+            self.auto_start_state.update(plain_text(self._auto_start_status_text()))
         if hasattr(self, "auto_start_button"):
             self.auto_start_button.label = self._auto_start_button_label()
 

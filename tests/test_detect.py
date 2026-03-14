@@ -13,6 +13,7 @@ from qcii_detector.config import AudioConfig, LoggingConfig, ServiceConfig, Tone
 from qcii_detector.detect import DetectorEngine, chunk_samples
 from qcii_detector.gpio_output import RelayDriver
 from qcii_detector.tones import FDMA_TONES_HZ, decode_standard, nearest_standard
+from qcii_detector.tui import build_vu_meter_text, plain_text
 
 
 CLOSE_TONE_THRESHOLD_HZ = 31.25
@@ -106,6 +107,16 @@ def test_detects_pair():
         detections.extend(engine.process_block(chunk, ts))
     assert len(detections) == 1
     assert detections[0].pair.name == "Test"
+
+
+def test_build_vu_meter_text_returns_plain_bracketed_text():
+    meter = build_vu_meter_text(0.0, 0.0)
+    assert str(meter) == "Input Level: [--------------------] -inf dBFS | peak 0.000"
+
+
+def test_plain_text_preserves_brackets():
+    value = plain_text("Station [A]")
+    assert str(value) == "Station [A]"
 
 
 def test_detects_single_pair_with_default_thresholds():
