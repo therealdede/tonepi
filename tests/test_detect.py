@@ -43,6 +43,25 @@ def build_config(tone_a, tone_b):
     return cfg
 
 
+def build_config_with_dropout(tone_a, tone_b, dropout_tolerance_ms):
+    pair = TonePair(
+        name="Test",
+        tone_a_hz=tone_a,
+        tone_b_hz=tone_b,
+        tone_a_ms=100,
+        tone_b_ms=100,
+        dropout_tolerance_ms=dropout_tolerance_ms,
+        tolerance_pct=1.5,
+        min_snr_db=6.0,
+        action=ToneAction(gpio_pin=17),
+    )
+    return ServiceConfig(
+        audio=AudioConfig(sample_rate=8000, frame_ms=10),
+        logging=LoggingConfig(level="WARNING"),
+        tone_pairs=[pair],
+    )
+
+
 def make_fake_sounddevice(input_stream_cls):
     class FakeSoundDevice:
         InputStream = input_stream_cls
@@ -124,6 +143,29 @@ def test_debug_block_reports_idle_noise_for_nonqualifying_input():
 
     assert debug.classification == "idle/noise"
     assert debug.best_pair_name == "Test"
+
+
+def test_detect_tolerates_brief_dropout_between_a_and_b():
+    tone_a = 687.5
+    tone_b = 937.5
+    cfg = build_config_with_dropout(tone_a, tone_b, dropout_tolerance_ms=50)
+    engine = DetectorEngine(cfg)
+
+    sample_rate = cfg.audio.sample_rate
+    a = make_pair_wave(tone_a, tone_a, sample_rate=sample_rate, tone_ms=100, silence_ms=0)
+    a = a[: int(sample_rate * 100 / 1000)]
+    dropout = np.zeros(int(sample_rate * 30 / 1000), dtype=np.float64)
+    b = make_pair_wave(tone_b, tone_b, sample_rate=sample_rate, tone_ms=100, silence_ms=0)
+    b = b[: int(sample_rate * 100 / 1000)]
+    wave = np.concatenate([a, dropout, b])
+
+    detections = []
+    for idx, chunk in enumerate(chunk_samples(wave, cfg.frame_samples)):
+        ts = idx * cfg.audio.frame_ms
+        detections.extend(engine.process_block(chunk, ts))
+
+    assert len(detections) == 1
+    assert detections[0].pair.name == "Test"
 
 
 def test_no_false_positive_with_noise():

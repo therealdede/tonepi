@@ -10,6 +10,7 @@ DEFAULT_CONFIG_PATH = "config/qcii.yaml"
 DEFAULT_LOG_PATH = "logs/qcii.log"
 MIN_ACTION_MS = 100
 MAX_ACTION_MS = 10_000
+MAX_DROPOUT_TOLERANCE_MS = 1_000
 
 
 class ToneAction(BaseModel):
@@ -45,6 +46,12 @@ class TonePair(BaseModel):
     tone_b_hz: float
     tone_a_ms: int = Field(600, ge=MIN_ACTION_MS, le=MAX_ACTION_MS)
     tone_b_ms: int = Field(600, ge=MIN_ACTION_MS, le=MAX_ACTION_MS)
+    dropout_tolerance_ms: int = Field(
+        50,
+        ge=0,
+        le=MAX_DROPOUT_TOLERANCE_MS,
+        description="Allowed brief dropout/noise gap before A/B accumulation resets",
+    )
     tolerance_pct: float = Field(1.5, ge=0.1, le=5.0)
     min_snr_db: float = Field(6.0, description="Minimum SNR for detection")
     action: ToneAction

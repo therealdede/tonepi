@@ -65,12 +65,14 @@ class TonePairState:
         self.state = "idle"
         self.a_accum = 0
         self.b_accum = 0
+        self.miss_accum = 0
         self.suppress_until = 0
 
     def reset(self):
         self.state = "idle"
         self.a_accum = 0
         self.b_accum = 0
+        self.miss_accum = 0
 
     def update(self, freq_hit: float | None, snr_db: float, now_ms: int) -> List[DetectionEvent]:
         events: List[DetectionEvent] = []
@@ -93,25 +95,37 @@ class TonePairState:
         if self.state == "idle":
             if matches_a:
                 self.a_accum += self.frame_ms
+                self.miss_accum = 0
                 if self.a_accum >= self.pair.tone_a_ms:
                     self.state = "wait_b"
                     self.b_accum = 0
+                    self.miss_accum = 0
             else:
-                self.a_accum = 0
+                if self.a_accum > 0:
+                    self.miss_accum += self.frame_ms
+                    if self.miss_accum > self.pair.dropout_tolerance_ms:
+                        self.reset()
+                else:
+                    self.a_accum = 0
         elif self.state == "wait_b":
             if matches_b:
                 self.b_accum += self.frame_ms
+                self.miss_accum = 0
                 if self.b_accum >= self.pair.tone_b_ms:
                     events.append(DetectionEvent(self.pair, now_ms))
                     self.state = "idle"
                     self.a_accum = 0
                     self.b_accum = 0
+                    self.miss_accum = 0
                     self.suppress_until = now_ms + self.pair.action.repeat_suppression_ms
             elif matches_a:
                 # still in A, hold
                 self.a_accum = min(self.a_accum + self.frame_ms, self.pair.tone_a_ms)
+                self.miss_accum = 0
             else:
-                self.reset()
+                self.miss_accum += self.frame_ms
+                if self.miss_accum > self.pair.dropout_tolerance_ms:
+                    self.reset()
         return events
 
     def preview_transition(self, freq_hit: float | None, snr_db: float, now_ms: int) -> str | None:
@@ -140,7 +154,10 @@ class TonePairState:
                     return "entered wait_b"
                 return f"A accum {next_a}/{self.pair.tone_a_ms} ms"
             if self.a_accum > 0:
-                return "reset"
+                next_miss = self.miss_accum + self.frame_ms
+                if next_miss > self.pair.dropout_tolerance_ms:
+                    return "reset"
+                return f"dropout tolerated ({next_miss}/{self.pair.dropout_tolerance_ms} ms)"
             return None
 
         if self.state == "wait_b":
@@ -153,7 +170,10 @@ class TonePairState:
                 return f"B accum {next_b}/{self.pair.tone_b_ms} ms"
             if matches_a:
                 return "holding A while waiting for B"
-            return "reset"
+            next_miss = self.miss_accum + self.frame_ms
+            if next_miss > self.pair.dropout_tolerance_ms:
+                return "reset"
+            return f"dropout tolerated ({next_miss}/{self.pair.dropout_tolerance_ms} ms)"
 
         return None
 

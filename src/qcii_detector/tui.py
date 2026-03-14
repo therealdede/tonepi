@@ -26,6 +26,7 @@ from .audio_devices import resolve_input_device, resolve_sample_rate
 from .config import (
     DEFAULT_CONFIG_PATH,
     MAX_ACTION_MS,
+    MAX_DROPOUT_TOLERANCE_MS,
     MIN_ACTION_MS,
     ServiceConfig,
     ToneAction,
@@ -81,6 +82,10 @@ class ToneEditScreen(ModalScreen[Optional[TonePair]]):
             "tone_b_hz": Input(value=str(tone.tone_b_hz) if tone else "", placeholder="e.g. 953.7"),
             "tone_a_ms": Input(value=str(tone.tone_a_ms if tone else 600), placeholder="e.g. 600"),
             "tone_b_ms": Input(value=str(tone.tone_b_ms if tone else 600), placeholder="e.g. 600"),
+            "dropout_tolerance_ms": Input(
+                value=str(tone.dropout_tolerance_ms if tone else 50),
+                placeholder="e.g. 50",
+            ),
             "tolerance_pct": Input(value=str(tone.tolerance_pct if tone else 1.5), placeholder="e.g. 1.5"),
             "min_snr_db": Input(value=str(tone.min_snr_db if tone else 6.0), placeholder="e.g. 6.0"),
             "gpio_pin": Input(value=str(tone.action.gpio_pin if tone else ""), placeholder="BCM number"),
@@ -104,6 +109,7 @@ class ToneEditScreen(ModalScreen[Optional[TonePair]]):
             ("tone_b_hz", "Tone B (Hz)"),
             ("tone_a_ms", "Tone A Duration (ms)"),
             ("tone_b_ms", "Tone B Duration (ms)"),
+            ("dropout_tolerance_ms", "Dropout Tolerance (ms)"),
             ("tolerance_pct", "Frequency Tolerance (%)"),
             ("min_snr_db", "Minimum SNR (dB)"),
             ("gpio_pin", "GPIO Pin (BCM)"),
@@ -155,6 +161,13 @@ class ToneEditScreen(ModalScreen[Optional[TonePair]]):
             raise ValueError(f"{label} must be between {MIN_ACTION_MS} and {MAX_ACTION_MS} ms")
         return value
 
+    def _validate_dropout_tolerance_ms(self, value: int) -> int:
+        if value < 0 or value > MAX_DROPOUT_TOLERANCE_MS:
+            raise ValueError(
+                f"Dropout Tolerance must be between 0 and {MAX_DROPOUT_TOLERANCE_MS} ms"
+            )
+        return value
+
     def _collect_ms_field_errors(self) -> list[str]:
         fields = [
             ("tone_a_ms", "Tone A Duration"),
@@ -183,6 +196,9 @@ class ToneEditScreen(ModalScreen[Optional[TonePair]]):
 
             tone_a_ms = self._parse_int_field("tone_a_ms", "Tone A Duration")
             tone_b_ms = self._parse_int_field("tone_b_ms", "Tone B Duration")
+            dropout_tolerance_ms = self._validate_dropout_tolerance_ms(
+                self._parse_int_field("dropout_tolerance_ms", "Dropout Tolerance")
+            )
             hold_ms = self._parse_int_field("hold_ms", "Relay Hold")
             rearm_ms = self._parse_int_field("rearm_ms", "Re-arm Delay")
             repeat_ms = self._parse_int_field("repeat_suppression_ms", "Repeat Suppression")
@@ -192,6 +208,7 @@ class ToneEditScreen(ModalScreen[Optional[TonePair]]):
                 tone_b_hz=self._parse_float_field("tone_b_hz", "Tone B"),
                 tone_a_ms=tone_a_ms,
                 tone_b_ms=tone_b_ms,
+                dropout_tolerance_ms=dropout_tolerance_ms,
                 tolerance_pct=self._parse_float_field("tolerance_pct", "Frequency Tolerance"),
                 min_snr_db=self._parse_float_field("min_snr_db", "Minimum SNR"),
                 action=ToneAction(
