@@ -616,7 +616,9 @@ class QCIIConfigApp(App):
             self._log_status(
                 "Detect status: idle/noise "
                 f"(peak {debug.peak_freq_hz:.1f} Hz, SNR {debug.snr_db:.1f} dB, "
-                f"nearest {debug.best_pair_name}, delta {debug.best_pair_delta_hz:.1f} Hz)"
+                f"nearest {debug.best_pair_name}, delta {debug.best_pair_delta_hz:.1f} Hz, "
+                f"A {debug.tone_a_accum_ms}/{debug.tone_a_target_ms} ms, "
+                f"B {debug.tone_b_accum_ms}/{debug.tone_b_target_ms} ms)"
             )
             return
         self._log_status(
@@ -626,7 +628,9 @@ class QCIIConfigApp(App):
             f"SNR {debug.snr_db:.1f} dB, "
             f"nearest {debug.best_pair_name}, "
             f"delta {debug.best_pair_delta_hz:.1f} Hz, "
-            f"state {debug.pair_state})"
+            f"state {debug.pair_state}, "
+            f"A {debug.tone_a_accum_ms}/{debug.tone_a_target_ms} ms, "
+            f"B {debug.tone_b_accum_ms}/{debug.tone_b_target_ms} ms)"
         )
 
     def _update_vu_meter(self, rms: float, peak: float) -> None:

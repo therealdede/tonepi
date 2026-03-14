@@ -51,6 +51,10 @@ class DetectionDebugInfo:
     best_pair_delta_hz: float
     classification: str
     pair_state: str
+    tone_a_accum_ms: int
+    tone_b_accum_ms: int
+    tone_a_target_ms: int
+    tone_b_target_ms: int
 
 
 class TonePairState:
@@ -183,6 +187,10 @@ class DetectorEngine:
             best_pair_delta_hz=float(best_pair_delta_hz),
             classification=classification,
             pair_state=state_after,
+            tone_a_accum_ms=int(best_state.a_accum),
+            tone_b_accum_ms=int(best_state.b_accum),
+            tone_a_target_ms=int(best_pair.tone_a_ms),
+            tone_b_target_ms=int(best_pair.tone_b_ms),
         )
         return events, debug
 
