@@ -49,6 +49,8 @@ class DetectionDebugInfo:
     snr_db: float
     best_pair_name: str
     best_pair_delta_hz: float
+    classification: str
+    pair_state: str
 
 
 class TonePairState:
@@ -120,6 +122,17 @@ class DetectorEngine:
         self.bank = GoertzelBank(unique_freqs, config.audio.sample_rate, config.frame_samples)
         self.states = [TonePairState(pair, self.frame_ms) for pair in config.tone_pairs]
 
+    def _matches_pair(self, pair: TonePair, freq_hit: float, snr_db: float) -> tuple[bool, bool]:
+        matches_a = (
+            abs(freq_hit - pair.tone_a_hz) / pair.tone_a_hz * 100 <= pair.tolerance_pct
+            and snr_db >= pair.min_snr_db
+        )
+        matches_b = (
+            abs(freq_hit - pair.tone_b_hz) / pair.tone_b_hz * 100 <= pair.tolerance_pct
+            and snr_db >= pair.min_snr_db
+        )
+        return matches_a, matches_b
+
     def _analyze_block(
         self, samples: np.ndarray, timestamp_ms: int | None = None, *, update_states: bool = True
     ) -> tuple[List[DetectionEvent], DetectionDebugInfo]:
@@ -140,22 +153,46 @@ class DetectorEngine:
             self.cfg.tone_pairs,
             key=lambda pair: min(abs(peak_freq - pair.tone_a_hz), abs(peak_freq - pair.tone_b_hz)),
         )
+        best_state = self.states[self.cfg.tone_pairs.index(best_pair)]
         best_pair_delta_hz = min(abs(peak_freq - best_pair.tone_a_hz), abs(peak_freq - best_pair.tone_b_hz))
+        matches_a, matches_b = self._matches_pair(best_pair, float(peak_freq), float(snr_db))
+        state_before = best_state.state
 
         events: List[DetectionEvent] = []
         if update_states:
             for state in self.states:
                 events.extend(state.update(peak_freq, snr_db, timestamp_ms))
+        state_after = best_state.state
+
+        if any(event.pair.name == best_pair.name for event in events):
+            classification = "detected"
+        elif state_before == "wait_b" and state_after == "idle" and not (matches_a or matches_b):
+            classification = "reset"
+        elif state_after == "wait_b":
+            classification = "waiting for B"
+        elif matches_a:
+            classification = "A matched"
+        elif matches_b:
+            classification = "B matched"
+        else:
+            classification = "idle/noise"
         debug = DetectionDebugInfo(
             peak_freq_hz=float(peak_freq),
             snr_db=float(snr_db),
             best_pair_name=best_pair.name,
             best_pair_delta_hz=float(best_pair_delta_hz),
+            classification=classification,
+            pair_state=state_after,
         )
         return events, debug
 
+    def process_block_with_debug(
+        self, samples: np.ndarray, timestamp_ms: int | None = None
+    ) -> tuple[List[DetectionEvent], DetectionDebugInfo]:
+        return self._analyze_block(samples, timestamp_ms, update_states=True)
+
     def process_block(self, samples: np.ndarray, timestamp_ms: int | None = None) -> List[DetectionEvent]:
-        events, _ = self._analyze_block(samples, timestamp_ms)
+        events, _ = self.process_block_with_debug(samples, timestamp_ms)
         return events
 
     def debug_block(self, samples: np.ndarray, timestamp_ms: int | None = None) -> DetectionDebugInfo:

@@ -115,6 +115,17 @@ def test_debug_block_does_not_advance_detection_state():
     assert detections[0].pair.name == "Test"
 
 
+def test_debug_block_reports_idle_noise_for_nonqualifying_input():
+    cfg = build_config(687.5, 937.5)
+    engine = DetectorEngine(cfg)
+
+    quiet_block = np.zeros(cfg.frame_samples, dtype=np.float64)
+    debug = engine.debug_block(quiet_block, 0)
+
+    assert debug.classification == "idle/noise"
+    assert debug.best_pair_name == "Test"
+
+
 def test_no_false_positive_with_noise():
     tone_a = 707.3
     tone_b = 953.7

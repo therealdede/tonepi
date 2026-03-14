@@ -311,11 +311,10 @@ class DetectionRuntime:
                 rms = float(np.sqrt(np.mean(np.square(block)))) if len(block) else 0.0
                 peak = float(np.max(np.abs(block))) if len(block) else 0.0
                 self.on_level(rms, peak)
-                debug = self.detector.debug_block(block, timestamp)
+                events, debug = self.detector.process_block_with_debug(block, timestamp)
                 if timestamp - self.last_debug_emit_ms >= 1000:
                     self.last_debug_emit_ms = timestamp
                     self.on_debug(debug)
-                events = self.detector.process_block(block, timestamp)
                 for event in events:
                     self.relay.activate(event.pair.action)
                     self.on_detect(event.pair.name, event.timestamp_ms)
@@ -613,12 +612,21 @@ class QCIIConfigApp(App):
         self._log_status(f"Detected {pair_name} at {timestamp_ms} ms")
 
     def _on_detection_debug(self, debug) -> None:
+        if debug.classification == "idle/noise":
+            self._log_status(
+                "Detect status: idle/noise "
+                f"(peak {debug.peak_freq_hz:.1f} Hz, SNR {debug.snr_db:.1f} dB, "
+                f"nearest {debug.best_pair_name}, delta {debug.best_pair_delta_hz:.1f} Hz)"
+            )
+            return
         self._log_status(
-            "Detect debug: "
-            f"peak {debug.peak_freq_hz:.1f} Hz, "
+            "Detect status: "
+            f"{debug.classification} "
+            f"(peak {debug.peak_freq_hz:.1f} Hz, "
             f"SNR {debug.snr_db:.1f} dB, "
-            f"nearest {debug.best_pair_name} "
-            f"(delta {debug.best_pair_delta_hz:.1f} Hz)"
+            f"nearest {debug.best_pair_name}, "
+            f"delta {debug.best_pair_delta_hz:.1f} Hz, "
+            f"state {debug.pair_state})"
         )
 
     def _update_vu_meter(self, rms: float, peak: float) -> None:
