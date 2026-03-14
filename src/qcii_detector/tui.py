@@ -302,7 +302,7 @@ class ToneTable(DataTable):
 class DetectionRuntime:
     """Runs live detection in background while the TUI remains interactive."""
 
-    def __init__(self, cfg: ServiceConfig, on_status, on_detect, on_level, on_debug):
+    def __init__(self, cfg: ServiceConfig, on_status, on_detect, on_level, on_debug, relay: Optional[RelayDriver] = None):
         self.cfg = cfg.model_copy(deep=True)
         self.cfg.audio.device = resolve_input_device(self.cfg.audio.device)
         self.cfg.audio.sample_rate = resolve_sample_rate(
@@ -313,7 +313,7 @@ class DetectionRuntime:
         self.on_detect = on_detect
         self.on_level = on_level
         self.on_debug = on_debug
-        self.relay = RelayDriver()
+        self.relay = relay or RelayDriver()
         self.detector = DetectorEngine(self.cfg)
         self.audio_queue = queue.Queue(maxsize=50)
         self.audio = AudioStreamer(self.cfg.audio, self.cfg.frame_samples, self.audio_queue)
@@ -614,6 +614,7 @@ class QCIIConfigApp(App):
             on_detect=lambda name, ts: self.call_from_thread(self._on_detection, name, ts),
             on_level=lambda rms, peak: self.call_from_thread(self._update_vu_meter, rms, peak),
             on_debug=lambda debug, immediate=False: self.call_from_thread(self._on_detection_debug, debug, immediate),
+            relay=self.relay,
         )
         try:
             self.runtime.start()
@@ -646,6 +647,7 @@ class QCIIConfigApp(App):
         self._cancel_auto_start()
         if self.tail_timer is not None:
             self.tail_timer.stop()
+        self.relay.close()
         for handler in list(self.file_logger.handlers):
             self.file_logger.removeHandler(handler)
             handler.close()

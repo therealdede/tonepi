@@ -49,6 +49,7 @@ class QCIIService:
     def stop(self):
         self._stop_event.set()
         self.audio.stop()
+        self.relay.close()
 
     def _loop(self):
         while not self._stop_event.is_set():

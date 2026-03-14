@@ -102,6 +102,18 @@ class RelayDriver:
             text = f"{text}; last error: {self.last_error}"
         return text
 
+    def close(self) -> None:
+        for pin, device in list(self.devices.items()):
+            close = getattr(device, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception as exc:
+                    LOG.warning("Failed to close GPIO device on pin %s: %s", pin, exc)
+        self.devices.clear()
+        self.device_polarity.clear()
+        self.last_activation.clear()
+
     def _build_device(self, action: ToneAction):
         kwargs = {
             "active_high": action.active_high,
@@ -199,6 +211,8 @@ def _parse_major_version(version: str) -> int | None:
 
 def _pin_error_hint(exc: Exception) -> str:
     message = str(exc).lower()
+    if "already in use" in message:
+        return "another RelayDriver instance still owns that pin; stop detection or restart the TUI to release it"
     if "default pin factory" in message or "badpinfactory" in message:
         return (
             "gpiozero could not initialize a GPIO backend; install python3-lgpio "
