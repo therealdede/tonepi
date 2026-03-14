@@ -22,8 +22,9 @@ class GoertzelBank:
         self.sample_rate = sample_rate
         self.block_size = block_size
 
-        self.ks = np.round(block_size * self.freqs / sample_rate).astype(int)
-        self.omegas = (2.0 * np.pi * self.ks) / block_size
+        # Use the exact target frequencies instead of rounding to DFT bins so
+        # closely spaced QCII tones (for example 566/598 Hz) remain distinguishable.
+        self.omegas = (2.0 * np.pi * self.freqs) / sample_rate
         self.coeffs = 2.0 * np.cos(self.omegas)
 
     def power(self, block: np.ndarray) -> np.ndarray:

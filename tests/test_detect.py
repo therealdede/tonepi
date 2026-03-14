@@ -1,4 +1,5 @@
 import sys
+from itertools import combinations
 from queue import Queue
 
 import numpy as np
@@ -11,6 +12,15 @@ from qcii_detector.audio import AudioStreamer
 from qcii_detector.config import AudioConfig, LoggingConfig, ServiceConfig, ToneAction, TonePair
 from qcii_detector.detect import DetectorEngine, chunk_samples
 from qcii_detector.gpio_output import RelayDriver
+from qcii_detector.tones import FDMA_TONES_HZ
+
+
+CLOSE_TONE_THRESHOLD_HZ = 31.25
+CLOSE_TONE_CASES = [
+    pytest.param(tone_a, tone_b, id=f"{tone_a:.1f}-{tone_b:.1f}")
+    for tone_a, tone_b in combinations(FDMA_TONES_HZ, 2)
+    if abs(tone_b - tone_a) <= CLOSE_TONE_THRESHOLD_HZ
+]
 
 
 def make_pair_wave(tone_a, tone_b, sample_rate=8000, tone_ms=600, silence_ms=0, amplitude=0.8):
@@ -114,6 +124,35 @@ def test_detects_single_pair_with_default_thresholds():
 
     assert len(detections) == 1
     assert detections[0].pair.name == "Test"
+
+
+@pytest.mark.parametrize(("tone_a", "tone_b"), CLOSE_TONE_CASES)
+def test_detects_close_spaced_pair(tone_a, tone_b):
+    pair = TonePair(
+        name="ClosePair",
+        tone_a_hz=tone_a,
+        tone_b_hz=tone_b,
+        tone_a_ms=500,
+        tone_b_ms=500,
+        tolerance_pct=1.5,
+        min_snr_db=6.0,
+        action=ToneAction(gpio_pin=17),
+    )
+    cfg = ServiceConfig(
+        audio=AudioConfig(sample_rate=8000, frame_ms=10),
+        logging=LoggingConfig(level="WARNING"),
+        tone_pairs=[pair],
+    )
+    engine = DetectorEngine(cfg)
+
+    wave = make_pair_wave(tone_a, tone_b, sample_rate=cfg.audio.sample_rate, tone_ms=600)
+    detections = []
+    for idx, chunk in enumerate(chunk_samples(wave, cfg.frame_samples)):
+        ts = idx * cfg.audio.frame_ms
+        detections.extend(engine.process_block(chunk, ts))
+
+    assert len(detections) == 1
+    assert detections[0].pair.name == "ClosePair"
 
 
 def test_debug_block_does_not_advance_detection_state():
