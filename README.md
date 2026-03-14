@@ -16,45 +16,44 @@ Headless service that listens for Motorola Quick Call II (QCII) two-tone paging 
 
 ## Installation (Pi OS / Debian Trixie)
 
-I designed this to be a "lazy" install, meaning you should just be able to copy and paste each step. as with everything, ymmv. 
-
-do a git clone, then cd to tonepi, then
-- open our "sandbox" so we dont mess with system python
-
-```
-python3 -m venv venv
-source venv/bin/activate
-```
-- *!!Temporarily Kinda Broken!!*    Make sure we have all of the packages that we need. 
+From the repo root, the shortest setup path is:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y python3.11 python3.11-venv python3-pip libopenblas-dev python3-scipy python3-numpy python3-yaml python3-sounddevice libportaudio2 portaudio19-dev
-```
-- Do some stuff so that the program can talk outside of the venv to the hardware correctly
-```
- deactivate 2>/dev/null
- rm -rf venv
-python3 -m venv --system-site-packages venv
-source venv/bin/activate
-```
-- dont know what this is for, skip it i guess???
-
-```
-# Optional: if you want to run the Textual TUI without pip-compiling it inside the venv:
-# sudo apt-get install -y python3-rich python3-textual
-```
-- does some configuration for the audio libraries, then actually installs the thing
-```
-sudo ldconfig
-pip install .
-```
-- Makes our config file and directory, and makes logs directory, only has to run onne on first start.
-```
-mkdir -p config logs
-cp config.example.yaml config/qcii.yaml
+./scripts/install-debian.sh
+source .venv/bin/activate
 qcii --config config/qcii.yaml
 ```
+
+The installer does four things for you:
+- installs the OS/runtime pieces the program needs: `python3`, `python3-venv`, `python3-pip`, `python3-setuptools`, `python3-wheel`, `python3-cffi`, and `libportaudio2`
+- installs distro-packaged Python dependencies when they are available: `click`, `gpiozero`, `numpy`, `pydantic`, `PyYAML`, `rich`, `scipy`, `sounddevice`, and `textual`
+- creates `.venv` with `--system-site-packages` so the virtualenv can reuse those apt-managed packages
+- installs this project into the virtualenv, then creates `config/qcii.yaml` plus the `config/` and `logs/` directories if they do not already exist
+
+Anything the distro repo does not provide cleanly, notably `sounddevice`, is installed into the virtualenv by `pip` as part of the project install.
+
+Direct Python packages imported by this project:
+- `click`
+- `gpiozero`
+- `numpy`
+- `pydantic`
+- `PyYAML`
+- `rich`
+- `scipy`
+- `sounddevice`
+- `textual`
+
+Optional test-only dependency:
+- `pytest`
+
+If you want the test dependency installed too:
+
+```bash
+./scripts/install-debian.sh --with-tests
+source .venv/bin/activate
+pytest
+```
+
 Use Python 3.10 or newer. The project requires `>=3.10`.
 
 ## Configuration
@@ -127,7 +126,7 @@ qcii list-tones --set fdma   # or --set tdma
 ```
 
 ## Systemd (optional)
-Edit `deploy/systemd/qcii.service` and place in `/etc/systemd/system/`:
+The service template assumes the repo lives at `/opt/tonepi` and the virtualenv lives at `/opt/tonepi/.venv`. Edit `deploy/systemd/qcii.service` if you install it anywhere else, then place it in `/etc/systemd/system/`:
 ```bash
 sudo cp deploy/systemd/qcii.service /etc/systemd/system/qcii.service
 sudo systemctl daemon-reload
@@ -138,11 +137,12 @@ sudo systemctl start qcii
 ## Testing
 From the repo root:
 ```bash
-pip install '.[test]'
+./scripts/install-debian.sh --with-tests
+source .venv/bin/activate
 pytest
 ```
 
-This project now defines a `test` extra in [pyproject.toml](/Users/adam/Documents/tonepi/pyproject.toml), so the command above installs `pytest` for the local environment.
+This project also defines a `test` extra in [pyproject.toml](/Users/adam/Documents/tonepi/pyproject.toml), so you can still use `.venv/bin/python -m pip install --no-build-isolation '.[test]'` if you prefer the manual route.
 
 ## Hardware Notes
 - Use a USB sound card with line-level input for radio interface.

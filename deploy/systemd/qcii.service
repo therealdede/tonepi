@@ -7,9 +7,10 @@ Wants=sound.target
 Type=simple
 User=pi
 Group=pi
+SupplementaryGroups=audio gpio
 Environment=PYTHONUNBUFFERED=1
-WorkingDirectory=/opt/qcii
-ExecStart=/opt/qcii-env/bin/qcii run --config /opt/qcii/config/qcii.yaml
+WorkingDirectory=/opt/tonepi
+ExecStart=/opt/tonepi/.venv/bin/qcii run --config /opt/tonepi/config/qcii.yaml
 Restart=on-failure
 RestartSec=3
 
