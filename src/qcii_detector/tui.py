@@ -633,6 +633,7 @@ class QCIIConfigApp(App):
     def on_mount(self) -> None:
         self.tail_timer = self.set_interval(2.0, self.refresh_log_tail)
         self.refresh_log_tail()
+        self._log_status(self.relay.describe_backend())
         self._warn_non_writable_paths(show_popup=True)
         self._update_auto_start_widgets()
         self._schedule_auto_start()
@@ -858,7 +859,11 @@ class QCIIConfigApp(App):
             self.push_screen(MessageScreen("Select a tone row first"))
             return
         action = self.manager.config.tone_pairs[idx].action
+        self._log_status(self.relay.describe_backend())
         self.relay.activate(action)
+        if self.relay.last_error:
+            self.push_screen(MessageScreen(self.relay.last_error))
+            return
         self._log_status(f"Pulse on GPIO {action.gpio_pin}")
 
     async def on_key(self, event: events.Key) -> None:

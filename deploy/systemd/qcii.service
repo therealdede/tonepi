@@ -9,6 +9,7 @@ User=pi
 Group=pi
 SupplementaryGroups=audio gpio
 Environment=PYTHONUNBUFFERED=1
+Environment=GPIOZERO_PIN_FACTORY=lgpio
 WorkingDirectory=/opt/tonepi
 ExecStart=/opt/tonepi/.venv/bin/qcii run --config /opt/tonepi/config/qcii.yaml
 Restart=on-failure

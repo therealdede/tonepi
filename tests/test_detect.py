@@ -388,6 +388,20 @@ def test_cli_without_subcommand_launches_tui(monkeypatch):
     assert calls == ["/tmp/qcii.yaml"]
 
 
+def test_gpio_status_reports_backend(monkeypatch):
+    class FakeRelay:
+        def describe_backend(self):
+            return "GPIO backend: fake"
+
+    monkeypatch.setattr(cli, "RelayDriver", FakeRelay)
+
+    runner = CliRunner()
+    result = runner.invoke(cli.main, ["gpio-status"])
+
+    assert result.exit_code == 0
+    assert "GPIO backend: fake" in result.output
+
+
 def test_list_tones_rejects_unknown_choice():
     runner = CliRunner()
     result = runner.invoke(cli.main, ["list-tones", "--set", "bogus"])

@@ -16,12 +16,15 @@ class RelayDriver:
     """Drive GPIO pins to energize relays; gracefully degrades if gpiozero is unavailable."""
 
     def __init__(self):
+        self.backend_warning: Optional[str] = None
+        self.last_error: Optional[str] = None
         try:
             import gpiozero  # type: ignore
 
             self.gpiozero = gpiozero
             self._log_gpiozero_details()
         except Exception as exc:  # pragma: no cover
+            self.last_error = f"gpiozero unavailable: {exc}"
             LOG.warning("gpiozero unavailable, using mock driver: %s", exc)
             self.gpiozero = None
         self.pin_factory: Optional[object] = None
@@ -47,6 +50,11 @@ class RelayDriver:
 
         major = _parse_major_version(version)
         if major is not None and major < 2:
+            self.backend_warning = (
+                f"gpiozero {version} detected from {location}. "
+                "Raspberry Pi 5 support requires gpiozero 2.x; "
+                "reinstall the project inside the virtualenv to restore live GPIO output."
+            )
             LOG.warning(
                 "gpiozero %s detected from %s. Raspberry Pi 5 support requires gpiozero 2.x; "
                 "reinstall the project inside the virtualenv to restore live GPIO output.",
@@ -59,17 +67,40 @@ class RelayDriver:
             from gpiozero import Device  # type: ignore
             from gpiozero.pins.lgpio import LGPIOFactory  # type: ignore
 
-            if Device.pin_factory is None:
+            if not isinstance(Device.pin_factory, LGPIOFactory):
                 Device.pin_factory = LGPIOFactory()
             LOG.info("Using gpiozero pin factory %s", type(Device.pin_factory).__name__)
             return Device.pin_factory
         except Exception as exc:
+            self.backend_warning = (
+                "Unable to initialize gpiozero LGPIOFactory. "
+                "On Raspberry Pi 5, install python3-lgpio and ensure the user can access /dev/gpiochip*."
+            )
             LOG.warning(
                 "Unable to initialize gpiozero LGPIOFactory: %s. "
                 "On Raspberry Pi 5, install python3-lgpio and ensure the user can access /dev/gpiochip*.",
                 exc,
             )
             return None
+
+    def describe_backend(self) -> str:
+        if self.gpiozero is None:
+            return f"GPIO backend: mock ({self.last_error or 'gpiozero unavailable'})"
+
+        version = "unknown"
+        try:
+            version = metadata.version("gpiozero")
+        except Exception:
+            version = getattr(self.gpiozero, "__version__", "unknown")
+
+        location = getattr(self.gpiozero, "__file__", "unknown location")
+        pin_factory = type(self.pin_factory).__name__ if self.pin_factory is not None else "auto/unknown"
+        text = f"GPIO backend: gpiozero {version} from {location}; pin factory {pin_factory}"
+        if self.backend_warning:
+            text = f"{text}; warning: {self.backend_warning}"
+        if self.last_error:
+            text = f"{text}; last error: {self.last_error}"
+        return text
 
     def _build_device(self, action: ToneAction):
         kwargs = {
@@ -98,12 +129,14 @@ class RelayDriver:
             try:
                 self.devices[pin] = self._build_device(action)
                 self.device_polarity[pin] = action.active_high
+                self.last_error = None
             except Exception as exc:
                 self.invalid_pins.add(pin)
                 hint = _pin_error_hint(exc)
                 message = f"Invalid GPIO pin {pin}; skipping relay activation: {exc}"
                 if hint:
                     message = f"{message}. {hint}"
+                self.last_error = message
                 LOG.error(message)
                 return INVALID_DEVICE
             return self.devices[pin]
@@ -141,7 +174,9 @@ class RelayDriver:
                 device.on()
                 time.sleep(action.hold_ms / 1000.0)
                 device.off()
+                self.last_error = None
             except Exception as exc:
+                self.last_error = f"GPIO activation failed on pin {action.gpio_pin}: {exc}"
                 LOG.error("GPIO activation failed on pin %s: %s", action.gpio_pin, exc)
 
         threading.Thread(target=pulse, daemon=True).start()

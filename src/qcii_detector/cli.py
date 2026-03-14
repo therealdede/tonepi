@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 
 import click
 import numpy as np
 
 from .audio_devices import auto_select_input_device, list_audio_devices, resolve_sample_rate
-from .config import DEFAULT_CONFIG_PATH, load_config
+from .config import DEFAULT_CONFIG_PATH, ToneAction, load_config
 from .detect import DetectorEngine, chunk_samples
+from .gpio_output import RelayDriver
 from .logging_utils import configure_logging
 from .service import run_service
 from .synth import generate_tone_pair_samples, write_wav
@@ -215,6 +217,29 @@ def audio_devices():
             f"(in={device.max_input_channels}, out={device.max_output_channels}, "
             f"default_sr={device.default_samplerate:.0f})"
         )
+
+
+@main.command("gpio-status")
+def gpio_status():
+    """Print the active GPIO backend details."""
+    relay = RelayDriver()
+    click.echo(relay.describe_backend())
+
+
+@main.command("gpio-pulse")
+@click.option("--pin", required=True, type=int, help="BCM GPIO pin number")
+@click.option("--hold-ms", default=1000, show_default=True, type=int)
+@click.option("--active-high/--active-low", default=True, show_default=True)
+def gpio_pulse(pin, hold_ms, active_high):
+    """Pulse a GPIO pin through the same relay driver used by the TUI/service."""
+    relay = RelayDriver()
+    click.echo(relay.describe_backend())
+    action = ToneAction(gpio_pin=pin, hold_ms=hold_ms, active_high=active_high)
+    relay.activate(action)
+    time.sleep((hold_ms / 1000.0) + 0.2)
+    if relay.last_error:
+        raise SystemExit(relay.last_error)
+    click.echo(f"Pulsed GPIO {pin} for {hold_ms} ms")
 
 
 def _resolve_tone_pair(cfg, pair_name):
