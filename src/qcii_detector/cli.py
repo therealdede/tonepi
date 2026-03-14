@@ -152,7 +152,8 @@ def list_tones(tone_set):
     tones = get_tone_set(tone_set)
     print(f"Tone set: {tone_set}")
     for f in tones:
-        print(f"{f:7.1f} Hz")
+        formatted = f"{f:.2f}".rstrip("0").rstrip(".")
+        print(f"{formatted:>8} Hz")
 
 
 @main.command()

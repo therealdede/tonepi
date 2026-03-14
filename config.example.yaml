@@ -16,12 +16,11 @@ logging:
 
 tone_pairs:
   - name: "Station 1"
-    tone_a_hz: 707.3
-    tone_b_hz: 953.7
+    tone_a_hz: 687.5
+    tone_b_hz: 937.5
     tone_a_ms: 600
     tone_b_ms: 600
     dropout_tolerance_ms: 50
-    tolerance_pct: 1.5
     min_snr_db: 6
     action:
       gpio_pin: 17
@@ -31,12 +30,11 @@ tone_pairs:
       repeat_suppression_ms: 3000
       name: "Relay 1"
   - name: "Station 2"
-    tone_a_hz: 634.5
-    tone_b_hz: 879.0
+    tone_a_hz: 566
+    tone_b_hz: 598
     tone_a_ms: 600
     tone_b_ms: 600
     dropout_tolerance_ms: 50
-    tolerance_pct: 1.5
     min_snr_db: 6
     action:
       gpio_pin: 27

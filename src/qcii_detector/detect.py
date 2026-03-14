@@ -82,7 +82,7 @@ class TonePairState:
             return False
         if self.tone_set is not None:
             return nearest_standard(freq_hit, tone_set=self.tone_set) == expected_hz
-        return abs(freq_hit - expected_hz) / expected_hz * 100 <= self.pair.tolerance_pct
+        return math.isclose(freq_hit, expected_hz, rel_tol=0.0, abs_tol=1e-6)
 
     def update(self, freq_hit: float | None, snr_db: float, now_ms: int) -> List[DetectionEvent]:
         events: List[DetectionEvent] = []

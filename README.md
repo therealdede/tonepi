@@ -9,7 +9,7 @@
 Headless service that listens for Motorola Quick Call II (QCII) two-tone paging pairs and energizes GPIO-driven relays based on configurable tone maps.
 
 ## Features
-- Real-time detection using Goertzel filters; configurable tolerance and SNR thresholds.
+- Real-time detection using Goertzel filters, exact-frequency analysis, document-based FDMA/TDMA bucket decoding, and SNR thresholds.
 - YAML configuration for tone pairs, GPIO actions, and audio settings.
 - CLI utilities for live service, offline detection against WAV files, listing standard tone frequencies, and recording calibration samples.
 - Systemd unit template for Raspberry Pi OS.
@@ -68,8 +68,10 @@ Key fields:
 - `audio.sample_rate`, `audio.frame_ms`: capture settings. Leave `audio.sample_rate` blank/null to use the selected input device's default rate; recording defaults to `44100`.
 - `audio.device`: optional input device override. Leave it unset to auto-select a USB input, preferring names that look like Sabrent/USB audio adapters.
 - `startup.auto_start_detection`: when enabled, the TUI will automatically start detection after a 5 second delay on launch.
-- `tone_pairs`: list of tone pairs with durations, tolerance, and GPIO action (`gpio_pin`, `active_high`, `hold_ms`, `rearm_ms`, `repeat_suppression_ms`).
+- `tone_pairs`: list of tone pairs with durations, SNR threshold, and GPIO action (`gpio_pin`, `active_high`, `hold_ms`, `rearm_ms`, `repeat_suppression_ms`).
 - `tone_pairs.dropout_tolerance_ms`: allows brief weak/noisy gaps inside tone A or B before the detector resets accumulation; useful for imperfect real-world QCII audio.
+- Standard FDMA and TDMA table tones are matched by the Motorola/APX decode buckets from the tone-set document, not by a user-tuned percentage tolerance.
+- Legacy `tolerance_pct` keys from older configs are ignored on load and dropped the next time the config is saved.
 - Timing fields in milliseconds (`tone_a_ms`, `tone_b_ms`, `hold_ms`, `rearm_ms`, `repeat_suppression_ms`) must be between `100` and `10000`.
 - `logging`: console or rotating file.
 

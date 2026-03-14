@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 DEFAULT_CONFIG_PATH = "config/qcii.yaml"
 DEFAULT_LOG_PATH = "logs/qcii.log"
@@ -41,6 +41,8 @@ class ToneAction(BaseModel):
 
 
 class TonePair(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     name: str
     tone_a_hz: float
     tone_b_hz: float
@@ -52,7 +54,6 @@ class TonePair(BaseModel):
         le=MAX_DROPOUT_TOLERANCE_MS,
         description="Allowed brief dropout/noise gap before A/B accumulation resets",
     )
-    tolerance_pct: float = Field(1.5, ge=0.1, le=5.0)
     min_snr_db: float = Field(6.0, description="Minimum SNR for detection")
     action: ToneAction
 

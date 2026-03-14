@@ -223,14 +223,6 @@ def infer_tone_set_for_pair(tone_a_hz: float, tone_b_hz: float) -> str | None:
     return None
 
 
-def nearest_standard(freq_hz: float, tolerance_pct: float = 1.5, tone_set: str = "fdma") -> float | None:
+def nearest_standard(freq_hz: float, tone_set: str = "fdma") -> float | None:
     """Return the decoded standard frequency for a received tone within the set's valid buckets."""
-    decoded = decode_standard(freq_hz, tone_set)
-    if decoded is not None:
-        return decoded
-
-    table = get_tone_set(tone_set)
-    closest = min(table, key=lambda f: abs(f - freq_hz))
-    if abs(closest - freq_hz) / closest * 100 <= tolerance_pct:
-        return closest
-    return None
+    return decode_standard(freq_hz, tone_set)

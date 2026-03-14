@@ -41,7 +41,6 @@ def build_config(tone_a, tone_b):
         tone_b_hz=tone_b,
         tone_a_ms=500,
         tone_b_ms=500,
-        tolerance_pct=1.5,
         min_snr_db=6.0,
         action=ToneAction(gpio_pin=17),
     )
@@ -61,7 +60,6 @@ def build_config_with_dropout(tone_a, tone_b, dropout_tolerance_ms):
         tone_a_ms=100,
         tone_b_ms=100,
         dropout_tolerance_ms=dropout_tolerance_ms,
-        tolerance_pct=1.5,
         min_snr_db=6.0,
         action=ToneAction(gpio_pin=17),
     )
@@ -138,9 +136,37 @@ def test_tdma_bucket_decode_uses_document_ranges():
     assert decode_standard(953.2, "tdma") == 968.75
 
 
-def test_nearest_standard_prefers_bucket_mapping_over_percent_tolerance():
+def test_nearest_standard_uses_bucket_mapping():
     assert nearest_standard(945.0, tone_set="fdma") == 932.0
     assert nearest_standard(945.0, tone_set="tdma") == 937.5
+
+
+def test_detects_off_center_in_bucket_fdma_pair():
+    pair = TonePair(
+        name="BucketedFDMA",
+        tone_a_hz=688.25,
+        tone_b_hz=932.0,
+        tone_a_ms=500,
+        tone_b_ms=500,
+        min_snr_db=6.0,
+        action=ToneAction(gpio_pin=17),
+    )
+    cfg = ServiceConfig(
+        audio=AudioConfig(sample_rate=8000, frame_ms=100),
+        logging=LoggingConfig(level="WARNING"),
+        tone_pairs=[pair],
+    )
+    engine = DetectorEngine(cfg)
+
+    # These are inside the Motorola FDMA decode buckets for 688.25 Hz and 932.0 Hz.
+    wave = make_pair_wave(700.0, 945.0, sample_rate=cfg.audio.sample_rate)
+    detections = []
+    for idx, chunk in enumerate(chunk_samples(wave, cfg.frame_samples)):
+        ts = idx * cfg.audio.frame_ms
+        detections.extend(engine.process_block(chunk, ts))
+
+    assert len(detections) == 1
+    assert detections[0].pair.name == "BucketedFDMA"
 
 
 @pytest.mark.parametrize(("tone_a", "tone_b"), CLOSE_TONE_CASES)
@@ -151,7 +177,6 @@ def test_detects_close_spaced_pair(tone_a, tone_b):
         tone_b_hz=tone_b,
         tone_a_ms=500,
         tone_b_ms=500,
-        tolerance_pct=1.5,
         min_snr_db=6.0,
         action=ToneAction(gpio_pin=17),
     )
@@ -245,6 +270,30 @@ def test_config_requires_at_least_one_tone_pair():
             logging=LoggingConfig(level="WARNING"),
             tone_pairs=[],
         )
+
+
+def test_config_ignores_legacy_tolerance_pct_key():
+    cfg = ServiceConfig.model_validate(
+        {
+            "audio": {"sample_rate": 8000, "frame_ms": 100},
+            "logging": {"level": "WARNING"},
+            "tone_pairs": [
+                {
+                    "name": "Legacy",
+                    "tone_a_hz": 687.5,
+                    "tone_b_hz": 937.5,
+                    "tone_a_ms": 500,
+                    "tone_b_ms": 500,
+                    "tolerance_pct": 1.5,
+                    "min_snr_db": 6.0,
+                    "action": {"gpio_pin": 17},
+                }
+            ],
+        }
+    )
+
+    assert cfg.tone_pairs[0].name == "Legacy"
+    assert not hasattr(cfg.tone_pairs[0], "tolerance_pct")
 
 
 def test_audio_streamer_restarts_cleanly(monkeypatch):
@@ -391,7 +440,6 @@ def test_timing_fields_enforce_100ms_to_10000ms():
             tone_b_hz=953.7,
             tone_a_ms=99,
             tone_b_ms=500,
-            tolerance_pct=1.5,
             min_snr_db=6.0,
             action=ToneAction(gpio_pin=17),
         )
@@ -403,7 +451,6 @@ def test_timing_fields_enforce_100ms_to_10000ms():
             tone_b_hz=953.7,
             tone_a_ms=500,
             tone_b_ms=10_001,
-            tolerance_pct=1.5,
             min_snr_db=6.0,
             action=ToneAction(gpio_pin=17),
         )
@@ -425,7 +472,6 @@ tone_pairs:
     tone_b_hz: 953.7
     tone_a_ms: 500
     tone_b_ms: 500
-    tolerance_pct: 1.5
     min_snr_db: 6.0
     action:
       gpio_pin: 17

@@ -78,15 +78,14 @@ class ToneEditScreen(ModalScreen[Optional[TonePair]]):
         tone = self.tone
         self.inputs = {
             "name": Input(value=tone.name if tone else "", placeholder="Station/Group name"),
-            "tone_a_hz": Input(value=str(tone.tone_a_hz) if tone else "", placeholder="e.g. 707.3"),
-            "tone_b_hz": Input(value=str(tone.tone_b_hz) if tone else "", placeholder="e.g. 953.7"),
+            "tone_a_hz": Input(value=str(tone.tone_a_hz) if tone else "", placeholder="e.g. 566"),
+            "tone_b_hz": Input(value=str(tone.tone_b_hz) if tone else "", placeholder="e.g. 598"),
             "tone_a_ms": Input(value=str(tone.tone_a_ms if tone else 600), placeholder="e.g. 600"),
             "tone_b_ms": Input(value=str(tone.tone_b_ms if tone else 600), placeholder="e.g. 600"),
             "dropout_tolerance_ms": Input(
                 value=str(tone.dropout_tolerance_ms if tone else 50),
                 placeholder="e.g. 50",
             ),
-            "tolerance_pct": Input(value=str(tone.tolerance_pct if tone else 1.5), placeholder="e.g. 1.5"),
             "min_snr_db": Input(value=str(tone.min_snr_db if tone else 6.0), placeholder="e.g. 6.0"),
             "gpio_pin": Input(value=str(tone.action.gpio_pin if tone else ""), placeholder="BCM number"),
             "active_high": Input(
@@ -110,7 +109,6 @@ class ToneEditScreen(ModalScreen[Optional[TonePair]]):
             ("tone_a_ms", "Tone A Duration (ms)"),
             ("tone_b_ms", "Tone B Duration (ms)"),
             ("dropout_tolerance_ms", "Dropout Tolerance (ms)"),
-            ("tolerance_pct", "Frequency Tolerance (%)"),
             ("min_snr_db", "Minimum SNR (dB)"),
             ("gpio_pin", "GPIO Pin (BCM)"),
             ("active_high", "Relay Active High"),
@@ -209,7 +207,6 @@ class ToneEditScreen(ModalScreen[Optional[TonePair]]):
                 tone_a_ms=tone_a_ms,
                 tone_b_ms=tone_b_ms,
                 dropout_tolerance_ms=dropout_tolerance_ms,
-                tolerance_pct=self._parse_float_field("tolerance_pct", "Frequency Tolerance"),
                 min_snr_db=self._parse_float_field("min_snr_db", "Minimum SNR"),
                 action=ToneAction(
                     gpio_pin=self._parse_int_field("gpio_pin", "GPIO Pin"),
