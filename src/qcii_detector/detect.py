@@ -8,6 +8,7 @@ from typing import Dict, Iterable, List, Sequence
 import numpy as np
 
 from .config import ServiceConfig, TonePair
+from .tones import get_tone_set, infer_tone_set_for_pair, nearest_standard
 
 
 def db10(value: float) -> float:
@@ -60,9 +61,10 @@ class DetectionDebugInfo:
 
 
 class TonePairState:
-    def __init__(self, pair: TonePair, frame_ms: int):
+    def __init__(self, pair: TonePair, frame_ms: int, tone_set: str | None = None):
         self.pair = pair
         self.frame_ms = frame_ms
+        self.tone_set = tone_set
         self.state = "idle"
         self.a_accum = 0
         self.b_accum = 0
@@ -75,23 +77,20 @@ class TonePairState:
         self.b_accum = 0
         self.miss_accum = 0
 
+    def _matches_expected_tone(self, freq_hit: float | None, expected_hz: float, snr_db: float) -> bool:
+        if freq_hit is None or snr_db < self.pair.min_snr_db:
+            return False
+        if self.tone_set is not None:
+            return nearest_standard(freq_hit, tone_set=self.tone_set) == expected_hz
+        return abs(freq_hit - expected_hz) / expected_hz * 100 <= self.pair.tolerance_pct
+
     def update(self, freq_hit: float | None, snr_db: float, now_ms: int) -> List[DetectionEvent]:
         events: List[DetectionEvent] = []
         if now_ms < self.suppress_until:
             return events
 
-        matches_a = (
-            freq_hit is not None
-            and abs(freq_hit - self.pair.tone_a_hz) / self.pair.tone_a_hz * 100
-            <= self.pair.tolerance_pct
-            and snr_db >= self.pair.min_snr_db
-        )
-        matches_b = (
-            freq_hit is not None
-            and abs(freq_hit - self.pair.tone_b_hz) / self.pair.tone_b_hz * 100
-            <= self.pair.tolerance_pct
-            and snr_db >= self.pair.min_snr_db
-        )
+        matches_a = self._matches_expected_tone(freq_hit, self.pair.tone_a_hz, snr_db)
+        matches_b = self._matches_expected_tone(freq_hit, self.pair.tone_b_hz, snr_db)
 
         if self.state == "idle":
             if matches_a:
@@ -133,18 +132,8 @@ class TonePairState:
         if now_ms < self.suppress_until:
             return None
 
-        matches_a = (
-            freq_hit is not None
-            and abs(freq_hit - self.pair.tone_a_hz) / self.pair.tone_a_hz * 100
-            <= self.pair.tolerance_pct
-            and snr_db >= self.pair.min_snr_db
-        )
-        matches_b = (
-            freq_hit is not None
-            and abs(freq_hit - self.pair.tone_b_hz) / self.pair.tone_b_hz * 100
-            <= self.pair.tolerance_pct
-            and snr_db >= self.pair.min_snr_db
-        )
+        matches_a = self._matches_expected_tone(freq_hit, self.pair.tone_a_hz, snr_db)
+        matches_b = self._matches_expected_tone(freq_hit, self.pair.tone_b_hz, snr_db)
 
         if self.state == "idle":
             if matches_a:
@@ -185,22 +174,26 @@ class DetectorEngine:
     def __init__(self, config: ServiceConfig):
         self.cfg = config
         self.frame_ms = config.audio.frame_ms
-        unique_freqs = sorted(
-            {pair.tone_a_hz for pair in config.tone_pairs} | {pair.tone_b_hz for pair in config.tone_pairs}
-        )
+        self.pair_tone_sets = [infer_tone_set_for_pair(pair.tone_a_hz, pair.tone_b_hz) for pair in config.tone_pairs]
+        unique_freqs = set()
+        for pair, tone_set in zip(config.tone_pairs, self.pair_tone_sets):
+            if tone_set is None:
+                unique_freqs.update((pair.tone_a_hz, pair.tone_b_hz))
+            else:
+                unique_freqs.update(get_tone_set(tone_set))
+        unique_freqs = sorted(unique_freqs)
         self.bank = GoertzelBank(unique_freqs, config.audio.sample_rate, config.frame_samples)
-        self.states = [TonePairState(pair, self.frame_ms) for pair in config.tone_pairs]
+        self.states = [
+            TonePairState(pair, self.frame_ms, tone_set)
+            for pair, tone_set in zip(config.tone_pairs, self.pair_tone_sets)
+        ]
 
     def _matches_pair(self, pair: TonePair, freq_hit: float, snr_db: float) -> tuple[bool, bool]:
-        matches_a = (
-            abs(freq_hit - pair.tone_a_hz) / pair.tone_a_hz * 100 <= pair.tolerance_pct
-            and snr_db >= pair.min_snr_db
+        state = self.states[self.cfg.tone_pairs.index(pair)]
+        return (
+            state._matches_expected_tone(freq_hit, pair.tone_a_hz, snr_db),
+            state._matches_expected_tone(freq_hit, pair.tone_b_hz, snr_db),
         )
-        matches_b = (
-            abs(freq_hit - pair.tone_b_hz) / pair.tone_b_hz * 100 <= pair.tolerance_pct
-            and snr_db >= pair.min_snr_db
-        )
-        return matches_a, matches_b
 
     def _analyze_block(
         self, samples: np.ndarray, timestamp_ms: int | None = None, *, update_states: bool = True

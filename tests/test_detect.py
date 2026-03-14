@@ -12,7 +12,7 @@ from qcii_detector.audio import AudioStreamer
 from qcii_detector.config import AudioConfig, LoggingConfig, ServiceConfig, ToneAction, TonePair
 from qcii_detector.detect import DetectorEngine, chunk_samples
 from qcii_detector.gpio_output import RelayDriver
-from qcii_detector.tones import FDMA_TONES_HZ
+from qcii_detector.tones import FDMA_TONES_HZ, decode_standard, nearest_standard
 
 
 CLOSE_TONE_THRESHOLD_HZ = 31.25
@@ -124,6 +124,23 @@ def test_detects_single_pair_with_default_thresholds():
 
     assert len(detections) == 1
     assert detections[0].pair.name == "Test"
+
+
+def test_fdma_bucket_decode_uses_document_ranges():
+    assert decode_standard(921.9, "fdma") == 932.0
+    assert decode_standard(953.1, "fdma") == 932.0
+    assert decode_standard(953.2, "fdma") == 970.0
+
+
+def test_tdma_bucket_decode_uses_document_ranges():
+    assert decode_standard(921.9, "tdma") == 937.5
+    assert decode_standard(953.1, "tdma") == 937.5
+    assert decode_standard(953.2, "tdma") == 968.75
+
+
+def test_nearest_standard_prefers_bucket_mapping_over_percent_tolerance():
+    assert nearest_standard(945.0, tone_set="fdma") == 932.0
+    assert nearest_standard(945.0, tone_set="tdma") == 937.5
 
 
 @pytest.mark.parametrize(("tone_a", "tone_b"), CLOSE_TONE_CASES)
