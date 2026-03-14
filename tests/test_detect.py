@@ -43,6 +43,29 @@ def build_config(tone_a, tone_b):
     return cfg
 
 
+def make_fake_sounddevice(input_stream_cls):
+    class FakeSoundDevice:
+        InputStream = input_stream_cls
+        default = type("DefaultDevice", (), {"device": (0, 1)})()
+
+        @staticmethod
+        def query_devices():
+            return [
+                {
+                    "name": "Fake USB Audio",
+                    "max_input_channels": 1,
+                    "max_output_channels": 0,
+                    "default_samplerate": 8000.0,
+                }
+            ]
+
+        @staticmethod
+        def sleep(_ms):
+            return None
+
+    return FakeSoundDevice
+
+
 def test_detects_pair():
     tone_a = 707.3
     tone_b = 953.7
@@ -126,14 +149,7 @@ def test_audio_streamer_restarts_cleanly(monkeypatch):
         def __exit__(self, exc_type, exc, tb):
             return False
 
-    class FakeSoundDevice:
-        InputStream = FakeStream
-
-        @staticmethod
-        def sleep(_ms):
-            return None
-
-    monkeypatch.setitem(sys.modules, "sounddevice", FakeSoundDevice)
+    monkeypatch.setitem(sys.modules, "sounddevice", make_fake_sounddevice(FakeStream))
 
     streamer = AudioStreamer(AudioConfig(sample_rate=8000, frame_ms=100), 800, Queue(maxsize=1))
     streamer.start()
@@ -162,27 +178,19 @@ def test_audio_streamer_raises_when_sounddevice_missing(monkeypatch):
 
 
 def test_audio_streamer_drops_frames_when_queue_is_full(monkeypatch):
-    class FakeSoundDevice:
-        def __init__(self):
-            self.callback = None
+    class FakeStream:
+        def __init__(self, **kwargs):
+            self.callback = kwargs["callback"]
 
-        class InputStream:
-            def __init__(self, **kwargs):
-                self.callback = kwargs["callback"]
+        def __enter__(self):
+            self.callback(np.ones((800, 1), dtype=np.float32), 800, None, None)
+            self.callback(np.ones((800, 1), dtype=np.float32), 800, None, None)
+            return self
 
-            def __enter__(self):
-                self.callback(np.ones((800, 1), dtype=np.float32), 800, None, None)
-                self.callback(np.ones((800, 1), dtype=np.float32), 800, None, None)
-                return self
+        def __exit__(self, exc_type, exc, tb):
+            return False
 
-            def __exit__(self, exc_type, exc, tb):
-                return False
-
-        @staticmethod
-        def sleep(_ms):
-            return None
-
-    monkeypatch.setitem(sys.modules, "sounddevice", FakeSoundDevice)
+    monkeypatch.setitem(sys.modules, "sounddevice", make_fake_sounddevice(FakeStream))
 
     q = Queue(maxsize=1)
     streamer = AudioStreamer(AudioConfig(sample_rate=8000, frame_ms=100), 800, q)

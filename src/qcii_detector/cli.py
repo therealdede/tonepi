@@ -98,9 +98,9 @@ def detect(config_path, wav_path):
     default=None,
     help="Tone pair name to synthesize. Defaults to the only configured pair.",
 )
-@click.option("--lead-in-ms", default=250, show_default=True, type=int)
+@click.option("--lead-in-ms", default=0, show_default=True, type=int)
 @click.option("--gap-ms", default=0, show_default=True, type=int)
-@click.option("--tail-ms", default=250, show_default=True, type=int)
+@click.option("--tail-ms", default=0, show_default=True, type=int)
 @click.option("--amplitude", default=0.8, show_default=True, type=float)
 @click.option("--noise-amplitude", default=0.0, show_default=True, type=float)
 @click.option("--seed", default=0, show_default=True, type=int)
