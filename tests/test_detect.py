@@ -2,6 +2,7 @@ import sys
 from itertools import combinations
 from queue import Queue
 from types import SimpleNamespace
+import types
 
 import numpy as np
 import pytest
@@ -415,11 +416,23 @@ def test_invalid_gpio_pin_logs_and_skips_activation(caplog):
         def __init__(self, pin, active_high=True, initial_value=False):
             raise ValueError(f"bad pin {pin}")
 
-    class FakeGPIOZero:
-        OutputDevice = FakeOutputDevice
+    fake_gpiozero = types.ModuleType("gpiozero")
+    fake_gpiozero.OutputDevice = FakeOutputDevice
+    fake_gpiozero.Device = SimpleNamespace(pin_factory=None)
+    fake_gpiozero.__file__ = "/tmp/fake_gpiozero.py"
 
-    driver = RelayDriver()
-    driver.gpiozero = FakeGPIOZero
+    original_gpiozero = sys.modules.get("gpiozero")
+    sys.modules["gpiozero"] = fake_gpiozero
+    original_version = gpio_output.metadata.version
+    gpio_output.metadata.version = lambda name: "2.0.1"
+    try:
+        driver = RelayDriver()
+    finally:
+        gpio_output.metadata.version = original_version
+        if original_gpiozero is not None:
+            sys.modules["gpiozero"] = original_gpiozero
+        else:
+            sys.modules.pop("gpiozero", None)
 
     with caplog.at_level("ERROR"):
         driver.activate(ToneAction(gpio_pin=999, hold_ms=100))
@@ -441,11 +454,24 @@ def test_active_low_relay_uses_inverted_gpio_logic():
         def off(self):
             pass
 
-    class FakeGPIOZero:
-        OutputDevice = FakeOutputDevice
+    fake_gpiozero = types.ModuleType("gpiozero")
+    fake_gpiozero.OutputDevice = FakeOutputDevice
+    fake_gpiozero.Device = SimpleNamespace(pin_factory=None)
+    fake_gpiozero.__file__ = "/tmp/fake_gpiozero.py"
 
-    driver = RelayDriver()
-    driver.gpiozero = FakeGPIOZero
+    original_gpiozero = sys.modules.get("gpiozero")
+    sys.modules["gpiozero"] = fake_gpiozero
+    original_version = gpio_output.metadata.version
+    gpio_output.metadata.version = lambda name: "2.0.1"
+    try:
+        driver = RelayDriver()
+    finally:
+        gpio_output.metadata.version = original_version
+        if original_gpiozero is not None:
+            sys.modules["gpiozero"] = original_gpiozero
+        else:
+            sys.modules.pop("gpiozero", None)
+
     driver.activate(ToneAction(gpio_pin=17, active_high=False, hold_ms=100))
     driver.activate(ToneAction(gpio_pin=18, active_high=True, hold_ms=100))
 
