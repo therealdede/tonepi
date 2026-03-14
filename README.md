@@ -51,7 +51,7 @@ If you want the test dependency installed too:
 ```bash
 ./scripts/install-debian.sh --with-tests
 source .venv/bin/activate
-pytest
+python -m pytest
 ```
 
 Use Python 3.10 or newer. The project requires `>=3.10`.
@@ -139,7 +139,7 @@ From the repo root:
 ```bash
 ./scripts/install-debian.sh --with-tests
 source .venv/bin/activate
-pytest
+python -m pytest
 ```
 
 This project also defines a `test` extra in [pyproject.toml](/Users/adam/Documents/tonepi/pyproject.toml), so you can still use `.venv/bin/python -m pip install --no-build-isolation '.[test]'` if you prefer the manual route.

@@ -125,6 +125,10 @@ echo "Virtual environment: $venv_dir"
 echo "Config file: $repo_root/config/qcii.yaml"
 echo "Run command: $venv_dir/bin/qcii --config $repo_root/config/qcii.yaml"
 
+if ((with_tests)); then
+    echo "Test command: $venv_dir/bin/python -m pytest"
+fi
+
 if ((${#missing_optional_packages[@]})); then
     echo
     echo "These optional Python packages were not available from apt and may be installed by pip instead:"
