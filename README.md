@@ -1,12 +1,12 @@
-# THIS PROJECT IS WRITTEN COMPLETELY BY AI. YES IT IS PROBABLY GARBAGE. 
+# This project was completely vibe coded.  
 
-# NO I DO NOT KNOW HOW TO FIX IT. 
+# No i do not know how to fix it 
 
-# IF YOU ARE HUMAN, AND DO KNOW HOW TO FIX IT, PLEASE FEEL FREE. THANK YOU.
+# If you are human, and do know how to fix it, please feel free. Thanks. 
 
 ## QCII Two-Tone Detector (Raspberry Pi 5)
 
-Headless service that listens for Motorola Quick Call II (QCII) two-tone paging pairs and energizes GPIO-driven relays based on configurable tone maps.
+Headless service that listens for QCII-style two-tone paging pairs and energizes GPIO-driven relays based on configurable tone maps.
 
 ## Features
 - Real-time detection using Goertzel filters, exact-frequency analysis, document-based FDMA/TDMA bucket decoding, and SNR thresholds.
