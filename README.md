@@ -78,7 +78,10 @@ Key fields:
 # Launches console TUI by default:
 qcii --config config/qcii.yaml
 
-# Run detector service explicitly:
+# Run detector service headless using config/qcii.yaml by default:
+qcii run
+
+# Optional: override the config path explicitly
 qcii run --config config/qcii.yaml
 ```
 
