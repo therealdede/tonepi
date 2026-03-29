@@ -11,7 +11,7 @@ SupplementaryGroups=audio gpio
 Environment=PYTHONUNBUFFERED=1
 Environment=GPIOZERO_PIN_FACTORY=lgpio
 WorkingDirectory=/opt/tonepi
-ExecStart=/opt/tonepi/venv/bin/qcii run --config /opt/tonepi/config/qcii.yaml
+ExecStart=/opt/tonepi/scripts/run-qcii-service.sh /opt/tonepi/config/qcii.yaml
 Restart=on-failure
 RestartSec=3
 

@@ -32,6 +32,8 @@ The installer does four things for you:
 
 Anything the distro repo does not provide cleanly, notably `sounddevice`, is installed into the virtualenv by `pip` as part of the project install. On Raspberry Pi 5, `gpiozero` is also intentionally installed from `pip` so the app gets `gpiozero` 2.x instead of the older Debian package line, while the installer will also use `python3-lgpio` when the OS provides it because `gpiozero` 2.x prefers `LGPIOFactory` for modern boards.
 
+For systemd boot startup, the repo also includes `scripts/run-qcii-service.sh`, which activates `venv` first and then launches the headless detector. That keeps the boot path aligned with the manual shell workflow that already works on the Pi.
+
 Direct Python packages imported by this project:
 - `click`
 - `gpiozero`
@@ -136,13 +138,15 @@ qcii list-tones --set fdma   # or --set tdma
 ```
 
 ## Systemd (optional)
-The service template assumes the repo lives at `/opt/tonepi` and the virtualenv lives at `/opt/tonepi/venv`. It also forces `GPIOZERO_PIN_FACTORY=lgpio` so Pi 5 systems use the modern GPIO backend. Edit `deploy/systemd/qcii.service` if you install it anywhere else, then place it in `/etc/systemd/system/`:
+The service template assumes the repo lives at `/opt/tonepi` and the virtualenv lives at `/opt/tonepi/venv`. It also forces `GPIOZERO_PIN_FACTORY=lgpio` so Pi 5 systems use the modern GPIO backend. The unit starts `scripts/run-qcii-service.sh`, which activates `venv` before launching headless `qcii run`. Edit `deploy/systemd/qcii.service` if you install it anywhere else, then place it in `/etc/systemd/system/`:
 ```bash
 sudo cp deploy/systemd/qcii.service /etc/systemd/system/qcii.service
 sudo systemctl daemon-reload
 sudo systemctl enable qcii
 sudo systemctl start qcii
 ```
+
+If you prefer, the TUI can also enable or disable the same boot service for you with the `Enable On Boot` / `Disable On Boot` button.
 
 ## Testing
 From the repo root:

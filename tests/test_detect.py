@@ -15,6 +15,7 @@ from qcii_detector.config import AudioConfig, LoggingConfig, ServiceConfig, Tone
 from qcii_detector.detect import DetectorEngine, chunk_samples
 from qcii_detector.gpio_output import RelayDriver
 from qcii_detector import gpio_output
+from qcii_detector.systemd_service import BootServiceStatus, SystemdServiceManager
 from qcii_detector.tones import FDMA_TONES_HZ, decode_standard, nearest_standard
 from qcii_detector.tui import build_vu_meter_text, plain_text
 
@@ -401,6 +402,42 @@ def test_gpio_status_reports_backend(monkeypatch):
 
     assert result.exit_code == 0
     assert "GPIO backend: fake" in result.output
+
+
+def test_boot_service_status_label():
+    assert BootServiceStatus(installed=False, enabled=False, active=False).label() == "Headless Service On Boot: NOT INSTALLED"
+    assert BootServiceStatus(installed=True, enabled=False, active=False).label() == "Headless Service On Boot: DISABLED"
+    assert BootServiceStatus(installed=True, enabled=True, active=True).label() == "Headless Service On Boot: ENABLED (running)"
+
+
+def test_systemd_service_render_unit_uses_current_venv(monkeypatch, tmp_path):
+    repo_root = tmp_path / "tonepi"
+    venv_bin = repo_root / "venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    python_bin = venv_bin / "python"
+    python_bin.write_text("", encoding="utf-8")
+    launcher = repo_root / "scripts" / "run-qcii-service.sh"
+    launcher.parent.mkdir(parents=True)
+    launcher.write_text("", encoding="utf-8")
+    config_path = repo_root / "config" / "qcii.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text("tone_pairs: []\n", encoding="utf-8")
+
+    monkeypatch.setattr("qcii_detector.systemd_service.sys.executable", str(python_bin))
+    monkeypatch.setattr("qcii_detector.systemd_service.getpass.getuser", lambda: "box")
+
+    class FakeGroup:
+        gr_name = "box"
+
+    monkeypatch.setattr("qcii_detector.systemd_service.grp.getgrgid", lambda _gid: FakeGroup())
+
+    manager = SystemdServiceManager(config_path)
+    unit = manager.render_unit()
+
+    assert "User=box" in unit
+    assert "Group=box" in unit
+    assert f"WorkingDirectory={repo_root}" in unit
+    assert f"ExecStart={launcher} {config_path}" in unit
 
 
 def test_list_tones_rejects_unknown_choice():

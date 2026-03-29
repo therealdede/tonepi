@@ -35,6 +35,7 @@ from .config import (
 )
 from .detect import DetectorEngine
 from .gpio_output import RelayDriver
+from .systemd_service import SystemdServiceManager
 
 LOG = logging.getLogger(__name__)
 
@@ -386,6 +387,8 @@ class QCIIConfigApp(App):
         self.config_path = config_path
         self.manager = ConfigManager(config_path)
         self.relay = RelayDriver()
+        self.service_manager = SystemdServiceManager(config_path)
+        self.boot_service_status = self.service_manager.service_status()
         self.runtime: Optional[DetectionRuntime] = None
         self.delete_arm_row: Optional[int] = None
         self.delete_arm_timer = None
@@ -443,6 +446,13 @@ class QCIIConfigApp(App):
                     id="toggle_auto_start",
                 )
                 yield self.auto_start_button
+                self.boot_service_state = Static(plain_text(self._boot_service_status_text()))
+                yield self.boot_service_state
+                self.boot_service_button = Button(
+                    self._boot_service_button_label(),
+                    id="toggle_boot_service",
+                )
+                yield self.boot_service_button
                 self.vu_meter = Static(build_vu_meter_text(0.0, 0.0))
                 yield self.vu_meter
                 yield Button("Start Detection", id="start_detect", variant="success")
@@ -510,6 +520,9 @@ class QCIIConfigApp(App):
         elif button_id == "toggle_auto_start":
             self._clear_delete_arm()
             self.toggle_auto_start()
+        elif button_id == "toggle_boot_service":
+            self._clear_delete_arm()
+            self.toggle_boot_service()
 
     def _selected_index(self) -> Optional[int]:
         row = self.tone_table.cursor_row
@@ -637,6 +650,7 @@ class QCIIConfigApp(App):
         self.tail_timer = self.set_interval(2.0, self.refresh_log_tail)
         self.refresh_log_tail()
         self._log_status(self.relay.describe_backend())
+        self._log_status(self._boot_service_status_text())
         self._warn_non_writable_paths(show_popup=True)
         self._update_auto_start_widgets()
         self._schedule_auto_start()
@@ -751,11 +765,48 @@ class QCIIConfigApp(App):
     def _auto_start_button_label(self) -> str:
         return "Disable Auto-Start" if self.manager.config.startup.auto_start_detection else "Enable Auto-Start"
 
+    def _boot_service_status_text(self) -> str:
+        return self.boot_service_status.label()
+
+    def _boot_service_button_label(self) -> str:
+        return "Disable On Boot" if self.boot_service_status.enabled else "Enable On Boot"
+
     def _update_auto_start_widgets(self) -> None:
         if hasattr(self, "auto_start_state"):
             self.auto_start_state.update(plain_text(self._auto_start_status_text()))
         if hasattr(self, "auto_start_button"):
             self.auto_start_button.label = self._auto_start_button_label()
+
+    def _refresh_boot_service_widgets(self) -> None:
+        self.boot_service_status = self.service_manager.service_status()
+        if hasattr(self, "boot_service_state"):
+            self.boot_service_state.update(plain_text(self._boot_service_status_text()))
+        if hasattr(self, "boot_service_button"):
+            self.boot_service_button.label = self._boot_service_button_label()
+
+    def toggle_boot_service(self) -> None:
+        try:
+            self._apply_form_to_config()
+            err = self.manager.validate()
+            if err:
+                self.push_screen(MessageScreen(f"Validation error:\n{err}"))
+                return
+            self.manager.save()
+        except Exception as exc:
+            self.push_screen(MessageScreen(f"Cannot update boot service: {exc}"))
+            return
+
+        self.service_manager = SystemdServiceManager(self.config_path)
+        if self.boot_service_status.enabled:
+            ok, message = self.service_manager.disable_on_boot()
+        else:
+            ok, message = self.service_manager.enable_on_boot()
+
+        self._refresh_boot_service_widgets()
+        if ok:
+            self._log_status(message)
+        else:
+            self.push_screen(MessageScreen(message))
 
     def _schedule_auto_start(self) -> None:
         self._cancel_auto_start()
