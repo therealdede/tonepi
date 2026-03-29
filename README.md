@@ -20,19 +20,19 @@ From the repo root, the shortest setup path is:
 
 ```bash
 ./scripts/install-debian.sh
-source venv/bin/activate
 qcii --config config/qcii.yaml
 ```
 
-The installer does four things for you:
+The installer does a few things for you:
 - installs the OS/runtime pieces the program needs: `python3`, `python3-venv`, `python3-pip`, `python3-setuptools`, `python3-wheel`, `python3-cffi`, and `libportaudio2`
 - installs distro-packaged Python dependencies when they are available: `click`, `numpy`, `pydantic`, `PyYAML`, `rich`, `scipy`, `sounddevice`, and `textual`
 - creates `venv` with `--system-site-packages` so the virtualenv can reuse those apt-managed packages
 - installs this project into the virtualenv, then creates `config/qcii.yaml` plus the `config/` and `logs/` directories if they do not already exist
+- installs `/usr/local/bin/qcii` as a launcher that activates `venv` for you before starting the app
 
 Anything the distro repo does not provide cleanly, notably `sounddevice`, is installed into the virtualenv by `pip` as part of the project install. On Raspberry Pi 5, `gpiozero` is also intentionally installed from `pip` so the app gets `gpiozero` 2.x instead of the older Debian package line, while the installer will also use `python3-lgpio` when the OS provides it because `gpiozero` 2.x prefers `LGPIOFactory` for modern boards.
 
-For systemd boot startup, the repo also includes `scripts/run-qcii-service.sh`, which activates `venv` first and then launches the headless detector. That keeps the boot path aligned with the manual shell workflow that already works on the Pi.
+For normal shell use, the repo includes `scripts/run-qcii.sh`, and the installer links it to `/usr/local/bin/qcii`. That means plain `qcii` still works even after you deactivate the virtualenv. For systemd boot startup, `scripts/run-qcii-service.sh` reuses that same launcher and starts the headless detector with `run --config ...`.
 
 Direct Python packages imported by this project:
 - `click`
@@ -52,6 +52,12 @@ If you want the test dependency installed too:
 
 ```bash
 ./scripts/install-debian.sh --with-tests
+venv/bin/python -m pytest
+```
+
+If you want to work inside the virtualenv manually, that still works too:
+
+```bash
 source venv/bin/activate
 python -m pytest
 ```
@@ -77,7 +83,7 @@ Key fields:
 
 ## Running
 ```bash
-# Launches console TUI by default:
+# Launches console TUI by default, even outside the virtualenv:
 qcii --config config/qcii.yaml
 
 # Run detector service headless using config/qcii.yaml by default:

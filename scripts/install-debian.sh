@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 venv_dir="${VENV_DIR:-$repo_root/venv}"
 python_bin="${PYTHON_BIN:-python3}"
 with_tests=0
+global_launcher_installed=0
 
 usage() {
     cat <<'EOF'
@@ -12,7 +13,7 @@ Usage: ./scripts/install-debian.sh [--with-tests] [--venv PATH]
 
 Installs the QCII detector on Raspberry Pi OS / Debian using apt for system
 packages and a virtual environment that can also see distro-provided Python
-packages.
+packages. Also installs a /usr/local/bin/qcii launcher when available.
 EOF
 }
 
@@ -114,16 +115,33 @@ fi
 echo "==> Installing project into virtual environment"
 "$venv_dir/bin/python" -m pip install --no-build-isolation --upgrade-strategy only-if-needed "$install_target"
 
+chmod +x "$repo_root/scripts/run-qcii.sh" "$repo_root/scripts/run-qcii-service.sh"
+
 mkdir -p "$repo_root/config" "$repo_root/logs"
 if [[ ! -f "$repo_root/config/qcii.yaml" ]]; then
     cp "$repo_root/config.example.yaml" "$repo_root/config/qcii.yaml"
+fi
+
+global_launcher="/usr/local/bin/qcii"
+launcher_target="$repo_root/scripts/run-qcii.sh"
+if [[ -e "$global_launcher" && ! -L "$global_launcher" ]]; then
+    echo "==> Skipping global qcii launcher: $global_launcher already exists and is not a symlink"
+else
+    echo "==> Installing global qcii launcher at $global_launcher"
+    "${sudo_cmd[@]}" ln -sfn "$launcher_target" "$global_launcher"
+    global_launcher_installed=1
 fi
 
 echo
 echo "Install complete."
 echo "Virtual environment: $venv_dir"
 echo "Config file: $repo_root/config/qcii.yaml"
-echo "Run command: $venv_dir/bin/qcii --config $repo_root/config/qcii.yaml"
+if ((global_launcher_installed)); then
+    echo "Run command: qcii --config $repo_root/config/qcii.yaml"
+else
+    echo "Run command: $venv_dir/bin/qcii --config $repo_root/config/qcii.yaml"
+fi
+echo "Direct venv command: $venv_dir/bin/qcii --config $repo_root/config/qcii.yaml"
 
 if ((with_tests)); then
     echo "Test command: $venv_dir/bin/python -m pytest"
